@@ -1,1 +1,1 @@
-# vo-app
+# vo_federation
