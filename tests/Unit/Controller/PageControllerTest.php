@@ -1,12 +1,12 @@
 <?php
 
-namespace OCA\VOFederation\Tests\Unit\Controller;
+namespace OCA\VO_Federation\Tests\Unit\Controller;
 
 use PHPUnit_Framework_TestCase;
 
 use OCP\AppFramework\Http\TemplateResponse;
 
-use OCA\VOFederation\Controller\PageController;
+use OCA\VO_Federation\Controller\PageController;
 
 
 class PageControllerTest extends PHPUnit_Framework_TestCase {
@@ -17,7 +17,7 @@ class PageControllerTest extends PHPUnit_Framework_TestCase {
 		$request = $this->getMockBuilder('OCP\IRequest')->getMock();
 
 		$this->controller = new PageController(
-			'vofederation', $request, $this->userId
+			'vo_federation', $request, $this->userId
 		);
 	}
 

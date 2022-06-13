@@ -1,4 +1,4 @@
-# V O Federation
+# VO Federation
 Place this app in **nextcloud/apps/**
 
 ## Building the app

@@ -1,6 +1,6 @@
 <?php
 
-namespace OCA\VOFederation\Tests\Integration\Controller;
+namespace OCA\VO_Federation\Tests\Integration\Controller;
 
 use OCP\AppFramework\App;
 use Test\TestCase;
@@ -17,13 +17,13 @@ class AppTest extends TestCase {
 
     public function setUp() {
         parent::setUp();
-        $app = new App('vofederation');
+        $app = new App('vo_federation');
         $this->container = $app->getContainer();
     }
 
     public function testAppInstalled() {
         $appManager = $this->container->query('OCP\App\IAppManager');
-        $this->assertTrue($appManager->isInstalled('vofederation'));
+        $this->assertTrue($appManager->isInstalled('vo_federation'));
     }
 
 }

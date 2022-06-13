@@ -1,5 +1,5 @@
 <?php
-namespace OCA\VOFederation\Controller;
+namespace OCA\VO_Federation\Controller;
 
 use OCP\IRequest;
 use OCP\AppFramework\Http\TemplateResponse;
@@ -25,7 +25,7 @@ class PageController extends Controller {
 	 * @NoCSRFRequired
 	 */
 	public function index() {
-		return new TemplateResponse('vofederation', 'index');  // templates/index.php
+		return new TemplateResponse('vo_federation', 'index');  // templates/index.php
 	}
 
 }

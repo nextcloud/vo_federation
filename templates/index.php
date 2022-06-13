@@ -1,6 +1,6 @@
 <?php
-script('vofederation', 'script');
-style('vofederation', 'style');
+script('vo_federation', 'script');
+style('vo_federation', 'style');
 ?>
 
 <div id="app">
