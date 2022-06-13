@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<info xmlns:xsi= "http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+    <id>vofederation</id>
+    <name>V O Federation</name>
+    <summary>VO Federation for Community AAIs</summary>
+    <description><![CDATA[A Virtual Organisation (VO) is a group of users which is managed within a Community AAI. AAI is short for “Authentication and Authorisation Infrastructure” and comprises the central component in gaining access to services like Nextcloud for several institutional users.
+
+The VO Federation app for Community AAIs allows federated sharing across VO groups independent of the Nextcloud instance any particular group member is using. Nextcloud users who want to participate in VO groups need to link their user account to their Community AAI using OpenID Connect.
+
+VO Federation enhances existing federation features by allowing Community AAIs to define groups on the shared user directory of all trusted Nextcloud instances using the app.]]></description>
+    <version>0.0.1</version>
+    <licence>agpl</licence>
+    <author>publicplan GmbH</author>
+    <namespace>VOFederation</namespace>
+    <category>social</category>
+    <bugs>https://github.com/nextcloud/vo_federation/issues</bugs>
+    <dependencies>
+        <nextcloud min-version="15" max-version="15"/>
+    </dependencies>
+    <navigations>
+        <navigation>
+            <name>V O Federation</name>
+            <route>vofederation.page.index</route>
+        </navigation>
+    </navigations>
+</info>
