@@ -1,5 +1,5 @@
 {
-    "name": "VO Federation",
+    "name": "nextcloud/vo_federation",
     "description": "VO Federation for Community AAIs",
     "type": "project",
     "license": "AGPL",
