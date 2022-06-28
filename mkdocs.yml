@@ -1,0 +1,7 @@
+site_name: Nextcloud VO Federation app
+theme:
+    name: readthedocs
+nav:
+    - Home: index.md
+    - Developer documentation:
+        - Getting started: development-environment.md
