@@ -24,4 +24,8 @@ VO Federation enhances existing federation features by allowing Community AAIs t
             <route>vo_federation.page.index</route>
         </navigation>
     </navigations>
+    <settings>
+        <personal>OCA\VO_Federation\Settings\Personal</personal>
+        <personal-section>OCA\VO_Federation\Settings\PersonalSection</personal-section>
+    </settings>
 </info>
