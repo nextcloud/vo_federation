@@ -16,7 +16,9 @@
         "psalm:fix": "psalm --alter --issues=InvalidReturnType,InvalidNullableReturnType,MissingParamType,InvalidFalsableReturnType",
         "psalm:update-baseline": "psalm --threads=1 --update-baseline"
     },
-    "require": {},
+    "require": {
+        "firebase/php-jwt": "^5.2"
+    },
     "require-dev": {
         "nextcloud/coding-standard": "^1.0.0",
         "phpunit/phpunit": "^9.5",

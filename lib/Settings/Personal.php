@@ -35,32 +35,14 @@ class Personal implements ISettings {
      * @return TemplateResponse
      */
     public function getForm(): TemplateResponse {
-        $token = $this->config->getUserValue($this->userId, Application::APP_ID, 'oauth_token');
-        $tokenSecret = $this->config->getUserValue($this->userId, Application::APP_ID, 'oauth_token_secret');
-
-        $consumerKey = $this->config->getAppValue(Application::APP_ID, 'consumer_key', Application::DEFAULT_AAI_CONSUMER_KEY);
-        $consumerSecret = $this->config->getAppValue(Application::APP_ID, 'consumer_secret', Application::DEFAULT_AAI_CONSUMER_SECRET);
-        $consumerKey = $consumerKey ?: Application::DEFAULT_AAI_CONSUMER_KEY;
-        $consumerSecret = $consumerSecret ?: Application::DEFAULT_AAI_CONSUMER_SECRET;
-
-        $hasConsumerKey = ($consumerKey !== '');
-        $hasConsumerSecret = ($consumerSecret !== '');
-
+        $accessToken = $this->config->getUserValue($this->userId, Application::APP_ID, 'accessToken');
+        $refreshToken = $this->config->getUserValue($this->userId, Application::APP_ID, 'refreshToken');
         $name = $this->config->getUserValue($this->userId, Application::APP_ID, 'name');
-        $screenName = $this->config->getUserValue($this->userId, Application::APP_ID, 'screen_name');
-
-        $userToFollow = $this->config->getUserValue($this->userId, Application::APP_ID, 'followed_user');
-		$userToFollowAdmin = $this->config->getAppValue(Application::APP_ID, 'followed_user');
 
         $userConfig = [
-            'oauth_token' => $token,
-            'oauth_token_secret' => $tokenSecret,
-            'consumer_key' => $hasConsumerKey,
-            'consumer_secret' => $hasConsumerSecret,
+            'access_token' => $accessToken,
+            'refresh_token' => $refreshToken,
             'name' => $name,
-            'screen_name' => $screenName,
-            'followed_user' => $userToFollow,
-            'followed_user_admin' => $userToFollowAdmin,
         ];
         $this->initialStateService->provideInitialState('user-config', $userConfig);
         return new TemplateResponse(Application::APP_ID, 'personalSettings');
