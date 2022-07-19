@@ -15142,9 +15142,6 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _nextcloud_axios__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @nextcloud/axios */ "./node_modules/@nextcloud/axios/dist/index.js");
 /* harmony import */ var _nextcloud_dialogs__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @nextcloud/dialogs */ "./node_modules/@nextcloud/dialogs/dist/index.es.js");
 /* harmony import */ var _nextcloud_dialogs_styles_toast_scss__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! @nextcloud/dialogs/styles/toast.scss */ "./node_modules/@nextcloud/dialogs/styles/toast.scss");
-/* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../utils */ "./src/utils.js");
-/* provided dependency */ var console = __webpack_require__(/*! ./node_modules/console-browserify/index.js */ "./node_modules/console-browserify/index.js");
-
 
 
 
@@ -15157,98 +15154,46 @@ __webpack_require__.r(__webpack_exports__);
   data: function data() {
     return {
       state: (0,_nextcloud_initial_state__WEBPACK_IMPORTED_MODULE_0__.loadState)('vo_federation', 'user-config'),
-      readonly: true,
-      chromiumImagePath: (0,_nextcloud_router__WEBPACK_IMPORTED_MODULE_1__.imagePath)('integration_twitter', 'chromium.png'),
-      firefoxImagePath: (0,_nextcloud_router__WEBPACK_IMPORTED_MODULE_1__.imagePath)('integration_twitter', 'firefox.png'),
-      isChromium: (0,_utils__WEBPACK_IMPORTED_MODULE_5__.detectBrowser)() === 'chrome',
-      isFirefox: (0,_utils__WEBPACK_IMPORTED_MODULE_5__.detectBrowser)() === 'firefox',
-      followedUserTitle: t('integration_twitter', 'Display name of Twitter user to follow in "User timeline" widget')
+      readonly: true
     };
-  },
-  computed: {
-    followedUserAdminString: function followedUserAdminString() {
-      return t('integration_twitter', 'Set to "@{name}" in admin settings', {
-        name: this.state.followed_user_admin
-      });
-    },
-    showOAuth: function showOAuth() {
-      return window.location.protocol === 'https:' && this.state.consumer_key && this.state.consumer_secret;
-    },
-    userName: function userName() {
-      return this.state.name + ' (@' + this.state.screen_name + ')';
-    }
   },
   mounted: function mounted() {
     var paramString = window.location.search.substr(1); // eslint-disable-next-line
 
     var urlParams = new URLSearchParams(paramString);
-    var twToken = urlParams.get('twitterToken');
+    var twToken = urlParams.get('aaiToken');
 
     if (twToken === 'success') {
-      (0,_nextcloud_dialogs__WEBPACK_IMPORTED_MODULE_3__.showSuccess)(t('integration_twitter', 'Successfully connected to Twitter!'));
+      (0,_nextcloud_dialogs__WEBPACK_IMPORTED_MODULE_3__.showSuccess)(t('vo_federation', 'Successfully connected to AAI!'));
     } else if (twToken === 'error') {
-      (0,_nextcloud_dialogs__WEBPACK_IMPORTED_MODULE_3__.showError)(t('integration_twitter', 'Twitter OAuth error:') + ' ' + urlParams.get('message'));
-    } // // register protocol handler
-    // if (window.isSecureContext && window.navigator.registerProtocolHandler) {
-    // 	const ncUrl = window.location.protocol
-    // 		+ '//' + window.location.hostname
-    // 		+ window.location.pathname.replace('settings/user/connected-accounts', '').replace('/index.php/', '')
-    // 	window.navigator.registerProtocolHandler(
-    // 		'web+nextcloudtwitter',
-    // 		generateUrl('/apps/integration_twitter/oauth-redirect') + '?url=%s',
-    // 		t('integration_twitter', 'Nextcloud Twitter integration on {ncUrl}', { ncUrl })
-    // 	)
-    // }
-
+      (0,_nextcloud_dialogs__WEBPACK_IMPORTED_MODULE_3__.showError)(t('vo_federation', 'AAI OIDC error:') + ' ' + urlParams.get('message'));
+    }
   },
   methods: {
-    onFollowedUserInput: function onFollowedUserInput() {
-      var _this = this;
-
-      (0,_utils__WEBPACK_IMPORTED_MODULE_5__.delay)(function () {
-        if (_this.state.followed_user.match(/^@/)) {
-          _this.state.followed_user = _this.state.followed_user.replace(/^@/, '');
-        }
-
-        _this.saveOptions({
-          followed_user: _this.state.followed_user
-        });
-      }, 2000)();
-    },
     onLogoutClick: function onLogoutClick() {
-      this.state.oauth_token = '';
+      this.state.access_token = '';
+      this.state.refresh_token = '';
       this.saveOptions({
-        oauth_token: this.state.oauth_token
+        access_token: this.state.access_token,
+        refresh_token: this.state.refresh_token
       });
     },
     saveOptions: function saveOptions(values) {
       var req = {
         values: values
       };
-      var url = (0,_nextcloud_router__WEBPACK_IMPORTED_MODULE_1__.generateUrl)('/apps/integration_twitter/config');
+      var url = (0,_nextcloud_router__WEBPACK_IMPORTED_MODULE_1__.generateUrl)('/apps/vo_federation/config');
       _nextcloud_axios__WEBPACK_IMPORTED_MODULE_2__["default"].put(url, req).then(function (response) {
-        (0,_nextcloud_dialogs__WEBPACK_IMPORTED_MODULE_3__.showSuccess)(t('integration_twitter', 'Twitter options saved'));
+        (0,_nextcloud_dialogs__WEBPACK_IMPORTED_MODULE_3__.showSuccess)(t('vo_federation', 'VO Federation options saved'));
       }).catch(function (error) {
-        (0,_nextcloud_dialogs__WEBPACK_IMPORTED_MODULE_3__.showError)(t('integration_twitter', 'Failed to save Twitter options') + ': ' + error.response.request.responseText);
-      }).then(function () {});
+        (0,_nextcloud_dialogs__WEBPACK_IMPORTED_MODULE_3__.showError)(t('vo_federation', 'Failed to save VO Federation options') + ': ' + error.response.request.responseText);
+      });
     },
     onOAuthClick: function onOAuthClick() {
-      var _this2 = this;
-
-      var url = (0,_nextcloud_router__WEBPACK_IMPORTED_MODULE_1__.generateUrl)('/apps/vo_federation/oauth-step1');
-      _nextcloud_axios__WEBPACK_IMPORTED_MODULE_2__["default"].get(url).then(function (response) {
-        _this2.step2(response.data);
-      }).catch(function (error) {
-        (0,_nextcloud_dialogs__WEBPACK_IMPORTED_MODULE_3__.showError)(t('integration_twitter', 'Failed to request Twitter 1st step OAuth token') + ': ' + error.response.request.responseText);
-        console.debug(error);
-      }).then(function () {});
-    },
-    step2: function step2(data) {
-      if (!data.startsWith('http')) {
-        (0,_nextcloud_dialogs__WEBPACK_IMPORTED_MODULE_3__.showError)(t('integration_twitter', 'OAuth failure') + ': ' + data);
-      } else {
-        window.location.replace(data);
-      }
+      var url = (0,_nextcloud_router__WEBPACK_IMPORTED_MODULE_1__.generateUrl)('/apps/vo_federation/login/{providerId}', {
+        providerId: 'keycloak'
+      });
+      window.location.replace(url);
     }
   }
 });
@@ -15277,77 +15222,34 @@ var render = function render() {
       id: "vo_federation_prefs"
     }
   }, [_c("h2", [_c("a", {
-    staticClass: "icon icon-twitter"
-  }), _vm._v("\n\t\t" + _vm._s(_vm.t("integration_twitter", "VO Federation")) + "\n\t")]), _vm._v(" "), _vm.showOAuth ? _c("div", {
-    staticClass: "twitter-content"
-  }, [!_vm.state.oauth_token ? _c("div", [_c("p", {
-    staticClass: "settings-hint"
-  }, [_c("span", {
-    staticClass: "icon icon-details"
-  }), _vm._v("\n\t\t\t\t" + _vm._s(_vm.t("integration_twitter", "Make sure you accepted the protocol registration on top of this page if you want to authenticate to Twitter.")) + "\n\t\t\t\t"), _vm.isChromium ? _c("span", [_c("br"), _vm._v("\n\t\t\t\t\t" + _vm._s(_vm.t("integration_twitter", 'With Chrome/Chromium, you should see a popup on browser top-left to authorize this page to open "web+nextcloudtwitter" links.')) + "\n\t\t\t\t\t"), _c("br"), _vm._v("\n\t\t\t\t\t" + _vm._s(_vm.t("integration_twitter", "If you don't see the popup, you can still click on this icon in the address bar.")) + "\n\t\t\t\t\t"), _c("br"), _vm._v(" "), _c("img", {
+    staticClass: "icon icon-vo"
+  }), _vm._v("\n\t\t" + _vm._s(_vm.t("vo_federation", "VO Federation")) + "\n\t")]), _vm._v(" "), _c("div", {
+    staticClass: "vo-content"
+  }, [!_vm.state.access_token ? _c("div", [_c("button", {
     attrs: {
-      src: _vm.chromiumImagePath
-    }
-  }), _vm._v(" "), _c("br"), _vm._v("\n\t\t\t\t\t" + _vm._s(_vm.t("integration_twitter", 'Then authorize this page to open "web+nextcloudtwitter" links.')) + "\n\t\t\t\t\t"), _c("br"), _vm._v("\n\t\t\t\t\t" + _vm._s(_vm.t("integration_twitter", "If you still don't manage to get the protocol registered, check your settings on this page:")) + "\n\t\t\t\t\t"), _c("b", [_vm._v("chrome://settings/handlers")])]) : _vm.isFirefox ? _c("span", [_c("br"), _vm._v("\n\t\t\t\t\t" + _vm._s(_vm.t("integration_twitter", 'With Firefox, you should see a bar on top of this page to authorize this page to open "web+nextcloudtwitter" links.')) + "\n\t\t\t\t\t"), _c("br"), _c("br"), _vm._v(" "), _c("img", {
-    attrs: {
-      src: _vm.firefoxImagePath
-    }
-  })]) : _vm._e()]), _vm._v(" "), !_vm.state.oauth_token ? _c("button", {
-    attrs: {
-      id: "twitter-oauth"
+      id: "aai-oidc"
     },
     on: {
       click: _vm.onOAuthClick
     }
   }, [_c("span", {
     staticClass: "icon icon-external"
-  }), _vm._v("\n\t\t\t\t" + _vm._s(_vm.t("integration_twitter", "Connect to Community AAI")) + "\n\t\t\t")]) : _vm._e()]) : _c("div", {
-    staticClass: "twitter-grid-form"
+  }), _vm._v("\n\t\t\t\t" + _vm._s(_vm.t("vo_federation", "Connect to Community AAI")) + "\n\t\t\t")])]) : _c("div", {
+    staticClass: "vo-grid-form"
   }, [_c("label", [_c("a", {
     staticClass: "icon icon-checkmark-color"
-  }), _vm._v("\n\t\t\t\t" + _vm._s(_vm.t("integration_twitter", "Connected as {user}", {
-    user: _vm.userName
+  }), _vm._v("\n\t\t\t\t" + _vm._s(_vm.t("vo_federation", "Connected as {user}", {
+    user: _vm.state.name
   })) + "\n\t\t\t")]), _vm._v(" "), _c("button", {
     attrs: {
-      id: "twitter-rm-cred"
+      id: "vo-rm-cred"
     },
     on: {
       click: _vm.onLogoutClick
     }
   }, [_c("span", {
     staticClass: "icon icon-close"
-  }), _vm._v("\n\t\t\t\t" + _vm._s(_vm.t("integration_twitter", "Disconnect from Twitter")) + "\n\t\t\t")]), _vm._v(" "), _c("label", {
-    attrs: {
-      for: "twitter-followed-user"
-    }
-  }, [_c("a", {
-    staticClass: "icon icon-user"
-  }), _vm._v("\n\t\t\t\t" + _vm._s(_vm.t("integration_twitter", "User to follow")) + "\n\t\t\t")]), _vm._v(" "), _vm.state.followed_user_admin ? _c("span", [_vm._v("\n\t\t\t\t" + _vm._s(_vm.followedUserAdminString) + "\n\t\t\t")]) : _c("input", {
-    directives: [{
-      name: "model",
-      rawName: "v-model",
-      value: _vm.state.followed_user,
-      expression: "state.followed_user"
-    }],
-    attrs: {
-      id: "twitter-followed-user",
-      type: "text",
-      title: _vm.followedUserTitle,
-      placeholder: _vm.followedUserTitle
-    },
-    domProps: {
-      value: _vm.state.followed_user
-    },
-    on: {
-      input: [function ($event) {
-        if ($event.target.composing) return;
-
-        _vm.$set(_vm.state, "followed_user", $event.target.value);
-      }, _vm.onFollowedUserInput]
-    }
-  })])]) : _c("p", {
-    staticClass: "settings-hint"
-  }, [_vm._v("\n\t\t" + _vm._s(_vm.t("integration_twitter", "You must access this page with HTTPS to be able to authenticate to Twitter.")) + "\n\t")])]);
+  }), _vm._v("\n\t\t\t\t" + _vm._s(_vm.t("vo_federation", "Disconnect from AAI")) + "\n\t\t\t")])])])]);
 };
 
 var staticRenderFns = [];
@@ -15372,86 +15274,6 @@ vue__WEBPACK_IMPORTED_MODULE_1__["default"].prototype.t = _nextcloud_l10n__WEBPA
 vue__WEBPACK_IMPORTED_MODULE_1__["default"].prototype.n = _nextcloud_l10n__WEBPACK_IMPORTED_MODULE_0__.translatePlural;
 vue__WEBPACK_IMPORTED_MODULE_1__["default"].prototype.OC = window.OC;
 vue__WEBPACK_IMPORTED_MODULE_1__["default"].prototype.OCA = window.OCA;
-
-/***/ }),
-
-/***/ "./src/utils.js":
-/*!**********************!*\
-  !*** ./src/utils.js ***!
-  \**********************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   "delay": () => (/* binding */ delay),
-/* harmony export */   "detectBrowser": () => (/* binding */ detectBrowser)
-/* harmony export */ });
-var mytimer = 0;
-function delay(callback, ms) {
-  return function () {
-    var context = this;
-    var args = arguments;
-    clearTimeout(mytimer);
-    mytimer = setTimeout(function () {
-      callback.apply(context, args);
-    }, ms || 0);
-  };
-}
-function detectBrowser() {
-  // Opera 8.0+
-  // eslint-disable-next-line
-  if (!!window.opr && !!opr.addons || !!window.opera || navigator.userAgent.indexOf(' OPR/') >= 0) {
-    return 'opera';
-  } // Firefox 1.0+
-
-
-  if (typeof InstallTrigger !== 'undefined') {
-    return 'firefox';
-  } // Chrome 1 - 79
-  // eslint-disable-next-line
-
-
-  if (!!window.chrome && (!!window.chrome.webstore || !!window.chrome.runtime)) {
-    return 'chrome';
-  } // Safari 3.0+ "[object HTMLElementConstructor]"
-  // eslint-disable-next-line
-
-
-  if (/constructor/i.test(window.HTMLElement) || function (p) {
-    return p.toString() === '[object SafariRemoteNotification]';
-  }(!window['safari'] || typeof safari !== 'undefined' && safari.pushNotification)) {
-    return 'safari';
-  } // Internet Explorer 6-11
-  // eslint-disable-next-line
-
-
-  if (
-  /*@cc_on!@*/
-   false || !!document.documentMode) {
-    return 'ie';
-  } // Edge 20+
-  // eslint-disable-next-line
-
-
-  if ((typeof isIE === 'undefined' || !isIE) && !!window.StyleMedia) {
-    return 'edge';
-  } // Edge (based on chromium) detection
-  // eslint-disable-next-line
-
-
-  if (typeof isChrome !== 'undefined' && isChrome && navigator.userAgent.indexOf('Edg') != -1) {
-    return 'edge-chromium';
-  } // Blink engine detection
-  // eslint-disable-next-line
-
-
-  if ((typeof isChrome !== 'undefined' && isChrome || typeof isOpera !== 'undefined' && isOpera) && !!window.CSS) {
-    return 'blink';
-  }
-
-  return 'unknown browser';
-}
 
 /***/ }),
 
@@ -20952,7 +20774,7 @@ var ___CSS_LOADER_EXPORT___ = _node_modules_css_loader_dist_runtime_api_js__WEBP
 var ___CSS_LOADER_URL_REPLACEMENT_0___ = _node_modules_css_loader_dist_runtime_getUrl_js__WEBPACK_IMPORTED_MODULE_2___default()(___CSS_LOADER_URL_IMPORT_0___);
 var ___CSS_LOADER_URL_REPLACEMENT_1___ = _node_modules_css_loader_dist_runtime_getUrl_js__WEBPACK_IMPORTED_MODULE_2___default()(___CSS_LOADER_URL_IMPORT_1___);
 // Module
-___CSS_LOADER_EXPORT___.push([module.id, "#vo_federation_prefs .icon[data-v-2905d59a] {\n  display: inline-block;\n  width: 32px;\n}\n.icon-twitter[data-v-2905d59a] {\n  background-image: url(" + ___CSS_LOADER_URL_REPLACEMENT_0___ + ");\n  background-size: 23px 23px;\n  height: 23px;\n  margin-bottom: -4px;\n}\nbody.theme--dark .icon-twitter[data-v-2905d59a] {\n  background-image: url(" + ___CSS_LOADER_URL_REPLACEMENT_1___ + ");\n}\n.twitter-content[data-v-2905d59a] {\n  margin-left: 40px;\n}\n.twitter-grid-form[data-v-2905d59a] {\n  max-width: 600px;\n  display: grid;\n  grid-template: 1fr/1fr 1fr;\n}\n.twitter-grid-form button .icon[data-v-2905d59a] {\n  margin-bottom: -1px;\n}\n.twitter-grid-form input[data-v-2905d59a] {\n  width: 100%;\n}\n.twitter-grid-form label[data-v-2905d59a] {\n  line-height: 38px;\n}\n#twitter-rm-cred[data-v-2905d59a] {\n  max-height: 34px;\n}", ""]);
+___CSS_LOADER_EXPORT___.push([module.id, "#vo_federation_prefs .icon[data-v-2905d59a] {\n  display: inline-block;\n  width: 32px;\n}\n.icon-vo[data-v-2905d59a] {\n  background-image: url(" + ___CSS_LOADER_URL_REPLACEMENT_0___ + ");\n  background-size: 23px 23px;\n  height: 23px;\n  margin-bottom: -4px;\n}\nbody.theme--dark .icon-vo[data-v-2905d59a] {\n  background-image: url(" + ___CSS_LOADER_URL_REPLACEMENT_1___ + ");\n}\n.vo-content[data-v-2905d59a] {\n  margin-left: 40px;\n}\n.vo-grid-form[data-v-2905d59a] {\n  max-width: 600px;\n  display: grid;\n  grid-template: 1fr/1fr 1fr;\n}\n.vo-grid-form button .icon[data-v-2905d59a] {\n  margin-bottom: -1px;\n}\n.vo-grid-form input[data-v-2905d59a] {\n  width: 100%;\n}\n.vo-grid-form label[data-v-2905d59a] {\n  line-height: 38px;\n}\n#vo-rm-cred[data-v-2905d59a] {\n  max-height: 34px;\n}", ""]);
 // Exports
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
 

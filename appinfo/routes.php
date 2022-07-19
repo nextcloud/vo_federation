@@ -11,7 +11,10 @@ return [
 	'routes' => [
 		['name' => 'page#index', 'url' => '/', 'verb' => 'GET'],
 		['name' => 'page#do_echo', 'url' => '/echo', 'verb' => 'POST'],
-        ['name' => 'config#doOauthStep1', 'url' => '/oauth-step1', 'verb' => 'GET'],
-        ['name' => 'config#oauthRedirect', 'url' => '/oauth-redirect', 'verb' => 'GET'],
+        ['name' => 'config#getUsername', 'url' => '/username', 'verb' => 'GET'],
+        ['name' => 'config#setConfig', 'url' => '/config', 'verb' => 'PUT'],
+        ['name' => 'config#setAdminConfig', 'url' => '/admin-config', 'verb' => 'PUT'],
+		['name' => 'login#login', 'url' => '/login/{providerId}', 'verb' => 'GET'],
+		['name' => 'login#code', 'url' => '/code', 'verb' => 'GET'],
 	]
 ];
