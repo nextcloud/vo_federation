@@ -1,12 +1,14 @@
 <?php
+
 namespace OCA\VO_Federation\Settings;
+
+use OCA\VO_Federation\AppInfo\Application;
 
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IInitialState;
 use OCP\IConfig;
 use OCP\Settings\ISettings;
-
-use OCA\VO_Federation\AppInfo\Application;
+use OCP\Util;
 
 class Personal implements ISettings {
 
@@ -31,28 +33,28 @@ class Personal implements ISettings {
 		$this->userId = $userId;
 	}
 
-    /**
-     * @return TemplateResponse
-     */
-    public function getForm(): TemplateResponse {
-        $accessToken = $this->config->getUserValue($this->userId, Application::APP_ID, 'accessToken');
-        $refreshToken = $this->config->getUserValue($this->userId, Application::APP_ID, 'refreshToken');
-        $name = $this->config->getUserValue($this->userId, Application::APP_ID, 'name');
+	/**
+	 * @return TemplateResponse
+	 */
+	public function getForm(): TemplateResponse {
+		$displayName = $this->config->getUserValue($this->userId, Application::APP_ID, 'displayName');
+		$groups = $this->config->getUserValue($this->userId, Application::APP_ID, 'groups');
 
-        $userConfig = [
-            'access_token' => $accessToken,
-            'refresh_token' => $refreshToken,
-            'name' => $name,
-        ];
-        $this->initialStateService->provideInitialState('user-config', $userConfig);
-        return new TemplateResponse(Application::APP_ID, 'personalSettings');
-    }
+		$userConfig = [
+			'displayName' => $displayName,
+			'groups' => $groups
+		];
+		$this->initialStateService->provideInitialState('user-config', $userConfig);
 
-    public function getSection(): string {
-        return 'connected-accounts';
-    }
+		Util::addScript(Application::APP_ID, Application::APP_ID . '-personalSettings');
+		return new TemplateResponse(Application::APP_ID, 'personalSettings');
+	}
 
-    public function getPriority(): int {
-        return 10;
-    }
+	public function getSection(): string {
+		return 'connected-accounts';
+	}
+
+	public function getPriority(): int {
+		return 10;
+	}
 }

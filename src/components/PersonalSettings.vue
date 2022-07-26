@@ -1,11 +1,11 @@
 <template>
-	<div id="vo_federation_prefs" class="section">
+	<div id="vo_federation-personal-settings" class="section">
 		<h2>
 			<a class="icon icon-vo" />
 			{{ t('vo_federation', 'VO Federation') }}
 		</h2>
 		<div class="vo-content">
-			<div v-if="!state.access_token">
+			<div v-if="!state.displayName">
 				<button id="aai-oidc" @click="onOAuthClick">
 					<span class="icon icon-external" />
 					{{ t('vo_federation', 'Connect to Community AAI') }}
@@ -14,12 +14,20 @@
 			<div v-else class="vo-grid-form">
 				<label>
 					<a class="icon icon-checkmark-color" />
-					{{ t('vo_federation', 'Connected as {user}', { user: state.name }) }}
+					{{ t('vo_federation', 'Connected as {user}', { user: state.displayName }) }}
 				</label>
 				<button id="vo-rm-cred" @click="onLogoutClick">
 					<span class="icon icon-close" />
 					{{ t('vo_federation', 'Disconnect from AAI') }}
 				</button>
+				<div style="grid-column: 1/-1">
+					<label for="vo-groups">VO-Groups</label>
+					<textarea id="vo-groups"
+						v-model="state.groups"
+						readonly
+						style="width: 100%"
+						rows="10" />
+				</div>
 			</div>
 		</div>
 	</div>
@@ -42,8 +50,10 @@ export default {
 
 	data() {
 		return {
-			state: loadState('vo_federation', 'user-config'),
-			readonly: true,
+			state: Object.assign({
+				displayName: '',
+				groups: '',
+			}, loadState('vo_federation', 'user-config')),
 		}
 	},
 
@@ -61,9 +71,9 @@ export default {
 
 	methods: {
 		onLogoutClick() {
-			this.state.access_token = ''
-			this.state.refresh_token = ''
-			this.saveOptions({ access_token: this.state.access_token, refresh_token: this.state.refresh_token })
+			this.state.displayName = ''
+			this.state.groups = ''
+			this.saveOptions({ displayName: this.state.displayName, groups: this.state.groups })
 		},
 		saveOptions(values) {
 			const req = {
@@ -82,7 +92,7 @@ export default {
 				})
 		},
 		onOAuthClick() {
-			const url = generateUrl('/apps/vo_federation/login/{providerId}', { providerId: 'keycloak' })
+			const url = generateUrl('/apps/vo_federation/login')
 			window.location.replace(url)
 		},
 	},
@@ -90,7 +100,7 @@ export default {
 </script>
 
 <style scoped lang="scss">
-#vo_federation_prefs .icon {
+#vo_federation-personal-settings .icon {
 	display: inline-block;
 	width: 32px;
 }

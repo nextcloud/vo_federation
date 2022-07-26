@@ -1,4 +1,5 @@
 <?php
+
 namespace OCA\VO_Federation\Settings;
 
 use OCP\IURLGenerator;
