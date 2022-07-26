@@ -27,9 +27,10 @@ declare(strict_types=1);
 
 namespace OCA\VO_Federation\Controller;
 
-use Firebase\JWT\JWT;
-use Firebase\JWT\JWK;
+use OCA\VO_Federation\Vendor\Firebase\JWT\JWT;
+use OCA\VO_Federation\Vendor\Firebase\JWT\JWK;
 use OCA\VO_Federation\AppInfo\Application;
+use OCA\VO_Federation\Service\ProviderService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
@@ -41,7 +42,6 @@ use OCP\ILogger;
 use OCP\IRequest;
 use OCP\ISession;
 use OCP\IURLGenerator;
-use OCP\IUser;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use OCP\Security\ISecureRandom;
@@ -50,7 +50,6 @@ class LoginController extends Controller {
 	private const STATE = 'oidc.state';
 	private const NONCE = 'oidc.nonce';
 	public const PROVIDERID = 'oidc.providerid';
-	private const REDIRECT_AFTER_LOGIN = 'oidc.redirect';
 
 	/** @var ISecureRandom */
 	private $random;
@@ -72,6 +71,9 @@ class LoginController extends Controller {
 
 	/** @var ITimeFactory */
 	private $timeFactory;
+
+	/** @var ProviderService */
+	private $providerService;
 
 	/** @var ILogger */
 	private $logger;
@@ -96,6 +98,7 @@ class LoginController extends Controller {
 		IUserManager $userManager,
 		ITimeFactory $timeFactory,
 		IConfig $config,
+		ProviderService $providerService,
 		ILogger $logger,
 		?string $userId
 	) {
@@ -108,6 +111,7 @@ class LoginController extends Controller {
 		$this->userSession = $userSession;
 		$this->userManager = $userManager;
 		$this->timeFactory = $timeFactory;
+		$this->providerService = $providerService;
 		$this->logger = $logger;
 		$this->config = $config;
 		$this->userId = $userId;
@@ -118,7 +122,7 @@ class LoginController extends Controller {
 	 * @NoCSRFRequired
 	 * @UseSession
 	 */
-	public function login(string $providerId) {
+	public function login(int $providerId = 0) {
 		$this->logger->debug('Initiating login for provider with id: ' . $providerId);
 
 		$state = $this->random->generate(32, ISecureRandom::CHAR_DIGITS . ISecureRandom::CHAR_UPPER);
@@ -131,15 +135,15 @@ class LoginController extends Controller {
 		$this->session->close();
 
 		// get attribute mapping settings
-		$uidAttribute = 'sub';
-		$emailAttribute = 'email';
-		$displaynameAttribute = 'name';
-		$quotaAttribute = 'quota';
+		$clientId = $this->providerService->getSetting($providerId, ProviderService::SETTING_CLIENT_ID);
+		$authorizationEndpoint = $this->providerService->getSetting($providerId, ProviderService::SETTING_AUTHORIZATION_ENDPOINT);
 
-		$authEndpoint = 'https://keycloak.home.arpa/auth/realms/Example/protocol/openid-connect/auth';
-		$clientId = 'nextcloud';
-		$scope = 'openid email profile';
-		$clientSecret = 'ef1baa4f-97dc-46c3-82ec-861cf4a2f8fb';
+		$scope = $this->providerService->getSetting($providerId, ProviderService::SETTING_SCOPE, 'openid profile');
+		$extraClaims = $this->providerService->getSetting($providerId, ProviderService::SETTING_EXTRA_CLAIMS);
+
+		$uidAttribute = $this->providerService->getSetting($providerId, ProviderService::SETTING_MAPPING_UID, 'sub');
+		$displaynameAttribute = $this->providerService->getSetting($providerId, ProviderService::SETTING_MAPPING_DISPLAYNAME, 'preferred_displayname');
+		$groupsAttribute = $this->providerService->getSetting($providerId, ProviderService::SETTING_MAPPING_GROUPS, 'groups');
 
 		$claims = [
 			// more details about requesting claims:
@@ -147,14 +151,12 @@ class LoginController extends Controller {
 			'id_token' => [
 				// ['essential' => true] means it's mandatory but it won't trigger an error if it's not there
 				// null means we want it
-				$emailAttribute => null,
 				$displaynameAttribute => null,
-				$quotaAttribute => null,
+				$groupsAttribute => null,
 			],
 			'userinfo' => [
-				$emailAttribute => null,
 				$displaynameAttribute => null,
-				$quotaAttribute => null,
+				$groupsAttribute => null,
 			],
 		];
 
@@ -179,10 +181,10 @@ class LoginController extends Controller {
 			'redirect_uri' => $this->urlGenerator->linkToRouteAbsolute(Application::APP_ID . '.login.code'),
 			'claims' => json_encode($claims),
 			'state' => $state,
-			'nonce' => $nonce,
+			'nonce' => $nonce
 		];
 
-		$url = $authEndpoint . '?' . http_build_query($data);
+		$url = $authorizationEndpoint . '?' . http_build_query($data);
 		$this->logger->debug('Redirecting user to: ' . $url);
 
 		// Workaround to avoid empty session on special conditions in Safari
@@ -219,9 +221,13 @@ class LoginController extends Controller {
 			], Http::STATUS_FORBIDDEN);
 		}
 
-		$tokenEndpoint = 'https://keycloak.home.arpa/auth/realms/Example/protocol/openid-connect/token';
-		$clientId = 'nextcloud';
-		$clientSecret = 'ef1baa4f-97dc-46c3-82ec-861cf4a2f8fb';
+		$providerId = (int)$this->session->get(self::PROVIDERID);
+
+		$clientId = $this->providerService->getSetting($providerId, ProviderService::SETTING_CLIENT_ID);
+		$clientSecret = $this->providerService->getSetting($providerId, ProviderService::SETTING_CLIENT_SECRET);
+		$tokenEndpoint = $this->providerService->getSetting($providerId, ProviderService::SETTING_TOKEN_ENDPOINT);
+		$jwksEndpoint = $this->providerService->getSetting($providerId, ProviderService::SETTING_JWKS_ENDPOINT);
+		$userinfoEndpoint = $this->providerService->getSetting($providerId, ProviderService::SETTING_USERINFO_ENDPOINT);
 
 		$client = $this->clientService->newClient();
 		$result = $client->post(
@@ -240,16 +246,19 @@ class LoginController extends Controller {
 		$data = json_decode($result->getBody(), true);
 		$this->logger->debug('Received code response: ' . json_encode($data, JSON_THROW_ON_ERROR));
 
-		$jwksUri = 'http://keycloak.home.arpa/auth/realms/Example/protocol/openid-connect/certs';
-
-		$responseBody = $client->get($jwksUri)->getBody();
+		$responseBody = $client->get($jwksEndpoint)->getBody();
 		$result = json_decode($responseBody, true);
 		$jwks = JWK::parseKeySet($result);
+
+		// Missing kid workaround
+		if (array_keys($jwks)[0] == 0 && count($jwks) == 1) {
+			$jwks = reset($jwks);
+		}
 
 		JWT::$leeway = 60;
 		$idTokenPayload = JWT::decode($data['id_token'], $jwks, array_keys(JWT::$supported_algs));
 
-		$this->logger->debug('Parsed the JWT payload: ' . json_encode($idTokenPayload, JSON_THROW_ON_ERROR));
+		$this->logger->info('Parsed the JWT payload: ' . json_encode($idTokenPayload, JSON_THROW_ON_ERROR));
 
 		if ($idTokenPayload->exp < $this->timeFactory->getTime()) {
 			$this->logger->debug('Token expired');
@@ -271,20 +280,38 @@ class LoginController extends Controller {
 		}
 
 		// get user ID attribute
-		$uidAttribute = 'sub';
-		$name = $idTokenPayload->{$uidAttribute} ?? null;
-		if ($name === null) {
+		$uidAttribute = $this->providerService->getSetting($providerId, ProviderService::SETTING_MAPPING_UID, 'sub');
+		$userId = $idTokenPayload->{$uidAttribute} ?? null;
+		if ($userId === null) {
 			return new JSONResponse(['Failed to load user']);
 		}
 
-        $this->config->setUserValue($this->userId, Application::APP_ID, 'accessToken', $data['access_token']);
-        $this->config->setUserValue($this->userId, Application::APP_ID, 'refreshToken', $data['refresh_token']);
-        $this->config->setUserValue($this->userId, Application::APP_ID, 'name', $idTokenPayload->preferred_username);
+		$displaynameAttribute = $this->providerService->getSetting($providerId, ProviderService::SETTING_MAPPING_DISPLAYNAME, 'preferred_displayname');
+		$groupsAttribute = $this->providerService->getSetting($providerId, ProviderService::SETTING_MAPPING_GROUPS, 'groups');
+
+		$this->logger->debug('Fetching user info endpoint');
+		$options = [
+			'headers' => [
+				'Authorization' => 'Bearer ' . $data['access_token'],
+			],
+		];
+		$result = $client->get($userinfoEndpoint, $options);
+		$userinfo = json_decode($result->getBody(), true);
+
+		$displayName = $userinfo[$displaynameAttribute] ?? $userId;
+		$groups = $userinfo[$groupsAttribute] ?? array();
+
+		$this->logger->info('Userinfo: ' . json_encode($userinfo, JSON_THROW_ON_ERROR));
+
+		$this->config->setUserValue($this->userId, Application::APP_ID, 'accessToken', $data['access_token']);
+		$this->config->setUserValue($this->userId, Application::APP_ID, 'refreshToken', $data['refresh_token']);
+		$this->config->setUserValue($this->userId, Application::APP_ID, 'displayName', $displayName);
+		$this->config->setUserValue($this->userId, Application::APP_ID, 'groups', implode($groups, "\n"));
 
 		return new RedirectResponse(
-            $this->urlGenerator->linkToRoute('settings.PersonalSettings.index', ['section' => 'connected-accounts']) .
-            '?aaiToken=success#vo_federation_prefs'
-        );
+			$this->urlGenerator->linkToRoute('settings.PersonalSettings.index', ['section' => 'connected-accounts']) .
+			'?aaiToken=success#vo_federation-personal-settings'
+		);
 	}
 
 	/**

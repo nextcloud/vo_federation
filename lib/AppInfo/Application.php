@@ -21,23 +21,21 @@ use OCP\AppFramework\Bootstrap\IBootstrap;
  * @package OCA\VO_Federation\AppInfo
  */
 class Application extends App implements IBootstrap {
+	public const APP_ID = 'vo_federation';
+	/**
+	 * Constructor
+	 *
+	 * @param array $urlParams
+	 */
+	public function __construct(array $urlParams = []) {
+		parent::__construct(self::APP_ID, $urlParams);
+	}
 
-    public const APP_ID = 'vo_federation';
-    /**
-     * Constructor
-     *
-     * @param array $urlParams
-     */
-    public function __construct(array $urlParams = []) {
-        parent::__construct(self::APP_ID, $urlParams);
-    }
+	public function register(IRegistrationContext $context): void {
+		// Register the composer autoloader for packages shipped by this app, if applicable
+		include_once __DIR__ . '/../../vendor/autoload.php';
+	}
 
-    public function register(IRegistrationContext $context): void {
-                // Register the composer autoloader for packages shipped by this app, if applicable
-                include_once __DIR__ . '/../../vendor/autoload.php';
-    }
-
-    public function boot(IBootContext $context): void {
-    }
+	public function boot(IBootContext $context): void {
+	}
 }
-

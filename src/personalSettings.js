@@ -1,7 +1,7 @@
 /* jshint esversion: 6 */
 
 /**
- * Nextcloud - twitter
+ * Nextcloud - VO Federation
  *
  *
  * This file is licensed under the Affero General Public License version 3 or
@@ -20,6 +20,6 @@ import PersonalSettings from './components/PersonalSettings'
 
 // eslint-disable-next-line
 new Vue({
-	el: '#vo_federation_prefs',
+	el: '#vo_federation-personal-settings',
 	render: h => h(PersonalSettings),
 })
