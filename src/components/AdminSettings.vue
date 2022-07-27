@@ -112,7 +112,7 @@
 import { loadState } from '@nextcloud/initial-state'
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
-import { showError } from '@nextcloud/dialogs'
+import { showError, showSuccess } from '@nextcloud/dialogs'
 
 export default {
 	name: 'AdminSettings',
@@ -140,6 +140,7 @@ export default {
 			const url = generateUrl('/apps/vo_federation/provider')
 			try {
 				await axios.put(url, { values: this.localProvider })
+				showSuccess(t('vo_federation', 'Provider updated successfully'))
 			} catch (error) {
 				console.error('Could not update the provider: ' + error.message, { error })
 				showError(t('vo_federation', 'Could not update the provider:') + ' ' + (error.response?.data?.message ?? error.message))
