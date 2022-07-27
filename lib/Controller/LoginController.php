@@ -31,6 +31,8 @@ use OCA\VO_Federation\Vendor\Firebase\JWT\JWT;
 use OCA\VO_Federation\Vendor\Firebase\JWT\JWK;
 use OCA\VO_Federation\AppInfo\Application;
 use OCA\VO_Federation\Service\ProviderService;
+use OCA\VO_Federation\Service\VirtualOrganisationService;
+
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
@@ -75,6 +77,9 @@ class LoginController extends Controller {
 	/** @var ProviderService */
 	private $providerService;
 
+	/** @var ProviderService */
+	private $voService;
+
 	/** @var ILogger */
 	private $logger;
 
@@ -99,6 +104,7 @@ class LoginController extends Controller {
 		ITimeFactory $timeFactory,
 		IConfig $config,
 		ProviderService $providerService,
+		VirtualOrganisationService $voService,
 		ILogger $logger,
 		?string $userId
 	) {
@@ -112,6 +118,7 @@ class LoginController extends Controller {
 		$this->userManager = $userManager;
 		$this->timeFactory = $timeFactory;
 		$this->providerService = $providerService;
+		$this->voService = $voService;
 		$this->logger = $logger;
 		$this->config = $config;
 		$this->userId = $userId;
@@ -307,6 +314,10 @@ class LoginController extends Controller {
 		$this->config->setUserValue($this->userId, Application::APP_ID, 'refreshToken', $data['refresh_token']);
 		$this->config->setUserValue($this->userId, Application::APP_ID, 'displayName', $displayName);
 		$this->config->setUserValue($this->userId, Application::APP_ID, 'groups', implode($groups, "\n"));
+
+		foreach ($groups as $gid) {
+			$this->voService->addVOUser($gid, $this->userId, $clientId);
+		}
 
 		return new RedirectResponse(
 			$this->urlGenerator->linkToRoute('settings.PersonalSettings.index', ['section' => 'connected-accounts']) .

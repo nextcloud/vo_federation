@@ -10,10 +10,13 @@
 
 namespace OCA\VO_Federation\AppInfo;
 
+use OCA\VO_Federation\Backend\GroupBackend;
+
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
+use OCP\IGroupManager;
 
 /**
  * Class Application
@@ -37,5 +40,11 @@ class Application extends App implements IBootstrap {
 	}
 
 	public function boot(IBootContext $context): void {
+		$context->injectFn(function (
+			IGroupManager $groupManager,
+			GroupBackend $groupBackend
+		) {
+			$groupManager->addBackend($groupBackend);
+		});
 	}
 }
