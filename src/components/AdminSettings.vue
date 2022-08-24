@@ -66,6 +66,12 @@
 				</h3>
 				<form ref="providerForm" class="provider-edit" @submit.prevent="onSubmit">
 					<p>
+						<label for="oidc-client-id">{{ t('vo_federation', 'Name') }}</label>
+						<input id="oidc-client-identifier"
+							v-model="editProvider.identifier"
+							type="text">
+					</p>
+					<p>
 						<label for="oidc-client-id">{{ t('vo_federation', 'Client ID') }}</label>
 						<input id="oidc-client-id"
 							v-model="editProvider.clientId"
@@ -140,6 +146,13 @@
 							type="text"
 							placeholder="groups">
 					</p>
+					<p>
+						<label for="mapping-regex-pattern">{{ t('vo_federation', 'Regex pattern') }}</label>
+						<input id="mapping-regex-pattern"
+							v-model="editProvider.mappingRegexPattern"
+							type="text"
+							placeholder=".*">
+					</p>
 					<fieldset style="margin-top: 10px">
 						<input type="button" :value="t('vo_federation', 'Cancel')" @click="editProvider = null">
 						<input type="submit" :value="t('vo_federation', 'Update')">
@@ -207,7 +220,7 @@ export default {
 				const url = generateUrl(`/apps/vo_federation/provider/${this.editProvider.providerId}`)
 				try {
 					await axios.put(url, { values: this.editProvider })
-					const providerIndex = this.provider.findIndex(provider => provider.providerId === this.editProvider.providerId)
+					const providerIndex = this.providers.findIndex(provider => provider.providerId === this.editProvider.providerId)
 					if (providerIndex > -1) {
 						this.$set(this.providers, providerIndex, this.editProvider)
 					}

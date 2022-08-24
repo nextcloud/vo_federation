@@ -57,6 +57,7 @@ class Personal implements ISettings {
 
 			$providers[] = [
 				'providerId' => $i,
+				'identifier' => $providerSettings['identifier'],
 				'clientId' => $clientId,
 				'displayName' => $displayName,
 				'groups' => $groups

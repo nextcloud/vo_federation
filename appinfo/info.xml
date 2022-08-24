@@ -16,7 +16,7 @@ VO Federation enhances existing federation features by allowing Community AAIs t
     <category>social</category>
     <bugs>https://github.com/nextcloud/vo_federation/issues</bugs>
     <dependencies>
-        <nextcloud min-version="25" max-version="25"/>
+        <nextcloud min-version="24" max-version="25"/>
     </dependencies>
     <settings>
         <admin>OCA\VO_Federation\Settings\Admin</admin>

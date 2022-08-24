@@ -8,8 +8,7 @@
 			<div v-if="!provider.displayName">
 				<button id="aai-oidc" @click="() => onOAuthClick(provider.providerId)">
 					<span class="icon icon-external" />
-					{{ t('vo_federation', 'Connect to Community AAI') }}<br>
-					{{ provider.clientId }}
+					{{ t('vo_federation', 'Connect with {name}', { name: provider.identifier }) }}
 				</button>
 			</div>
 			<div v-else class="vo-grid-form">

@@ -24,10 +24,15 @@
  */
 namespace OCA\VO_Federation\Backend;
 
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use OCP\Group\Backend\ABackend;
 use OCP\Group\Backend\IGetDisplayNameBackend;
 use OCP\Group\Backend\IGroupDetailsBackend;
-
+use OCP\Group\Backend\IDeleteGroupBackend;
+use OCP\Group\Backend\IAddToGroupBackend;
+use OCP\Group\Backend\IRemoveFromGroupBackend;
+use OCP\Group\Backend\INamedBackend;
+use OCP\IDBConnection;
 use OCP\ILogger;
 
 /**
@@ -35,7 +40,11 @@ use OCP\ILogger;
  */
 class GroupBackend extends ABackend implements
 	IGetDisplayNameBackend,
-	IGroupDetailsBackend {
+	IGroupDetailsBackend,
+	IDeleteGroupBackend,
+	IAddToGroupBackend,
+	IRemoveFromGroupBackend,
+	INamedBackend {
 
 	/**
 	 * @var string The application name.
@@ -46,9 +55,125 @@ class GroupBackend extends ABackend implements
 	 */
 	private $logger;
 
-	public function __construct($AppName, ILogger $logger) {
+	/** @var string[] */
+	private $groupCache = [];
+
+	/** @var IDBConnection */
+	private $dbConn;
+
+	public function __construct($AppName, ILogger $logger, IDBConnection $dbConn = null) {
 		$this->appName = $AppName;
 		$this->logger = $logger;
+		$this->dbConn = $dbConn;
+	}
+
+	private function fixDI() {
+		if ($this->dbConn === null) {
+			$this->dbConn = \OC::$server->getDatabaseConnection();
+		}
+	}
+
+	/**
+	 * Try to create a new group
+	 * @param string $gid The name of the group to create
+	 * @return bool
+	 *
+	 * Tries to create a new group. If the group name already exists, false will
+	 * be returned.
+	 */
+	public function createGroup(string $gid, string $displayName): bool {
+		$this->fixDI();
+
+		try {
+			// Add group
+			$builder = $this->dbConn->getQueryBuilder();
+			$result = $builder->insert('vo_groups')
+				->setValue('gid', $builder->createNamedParameter($gid))
+				->setValue('displayname', $builder->createNamedParameter($displayName))
+				->execute();
+		} catch (UniqueConstraintViolationException $e) {
+			$result = 0;
+		}
+
+		// Add to cache
+		$this->groupCache[$gid] = [
+			'gid' => $gid,
+			'displayname' => $displayName
+		];
+
+		return $result === 1;
+	}
+
+	/**
+	 * delete a group
+	 * @param string $gid gid of the group to delete
+	 * @return bool
+	 *
+	 * Deletes a group and removes it from the group_user-table
+	 */
+	public function deleteGroup(string $gid): bool {
+		$this->fixDI();
+
+		// Delete the group
+		$qb = $this->dbConn->getQueryBuilder();
+		$qb->delete('vo_groups')
+			->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
+			->execute();
+
+		// Delete the group-user relation
+		$qb = $this->dbConn->getQueryBuilder();
+		$qb->delete('vo_group_user')
+			->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
+			->execute();
+
+		// Delete from cache
+		unset($this->groupCache[$gid]);
+
+		return true;
+	}
+
+	/**
+	 * Add a user to a group
+	 * @param string $uid Name of the user to add to group
+	 * @param string $gid Name of the group in which add the user
+	 * @return bool
+	 *
+	 * Adds a user to a group.
+	 */
+	public function addToGroup(string $uid, string $gid): bool {
+		$this->fixDI();
+
+		// No duplicate entries!
+		if (!$this->inGroup($uid, $gid)) {
+			$qb = $this->dbConn->getQueryBuilder();
+			$qb->insert('vo_group_user')
+				->setValue('uid', $qb->createNamedParameter($uid))
+				->setValue('gid', $qb->createNamedParameter($gid))
+				->execute();
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	/**
+	 * Removes a user from a group
+	 * @param string $uid Name of the user to remove from group
+	 * @param string $gid Name of the group from which remove the user
+	 * @return bool
+	 *
+	 * removes the user from a group.
+	 */
+	public function removeFromGroup(string $uid, string $gid): bool {
+		$this->fixDI();
+
+		$qb = $this->dbConn->getQueryBuilder();
+		$qb->delete('vo_group_user')
+			->where($qb->expr()->eq('uid', $qb->createNamedParameter($uid)))
+			->andWhere($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
+			->execute();
+
+		return true;
 	}
 
 	/**
@@ -60,7 +185,20 @@ class GroupBackend extends ABackend implements
 	 * Checks whether the user is member of a group or not.
 	 */
 	public function inGroup($uid, $gid) {
-		return in_array($gid, $this->getUserGroups($uid));
+		$this->fixDI();
+
+		// check
+		$qb = $this->dbConn->getQueryBuilder();
+		$cursor = $qb->select('uid')
+			->from('vo_group_user')
+			->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
+			->andWhere($qb->expr()->eq('uid', $qb->createNamedParameter($uid)))
+			->execute();
+
+		$result = $cursor->fetch();
+		$cursor->closeCursor();
+
+		return $result ? true : false;
 	}
 
 	/**
@@ -72,7 +210,32 @@ class GroupBackend extends ABackend implements
 	 * if the user exists at all.
 	 */
 	public function getUserGroups($uid) {
-		return [];
+		//guests has empty or null $uid
+		if ($uid === null || $uid === '') {
+			return [];
+		}
+
+		$this->fixDI();
+
+		// No magic!
+		$qb = $this->dbConn->getQueryBuilder();
+		$cursor = $qb->select('gu.gid', 'g.displayname')
+			->from('vo_group_user', 'gu')
+			->leftJoin('gu', 'vo_groups', 'g', $qb->expr()->eq('gu.gid', 'g.gid'))
+			->where($qb->expr()->eq('uid', $qb->createNamedParameter($uid)))
+			->execute();
+
+		$groups = [];
+		while ($row = $cursor->fetch()) {
+			$groups[] = $row['gid'];
+			$this->groupCache[$row['gid']] = [
+				'gid' => $row['gid'],
+				'displayname' => $row['displayname'],
+			];
+		}
+		$cursor->closeCursor();
+
+		return $groups;
 	}
 
 	/**
@@ -84,9 +247,34 @@ class GroupBackend extends ABackend implements
 	 *
 	 * Returns a list with all groups
 	 */
+	public function getGroups($search = '', $limit = null, $offset = null) {
+		$this->fixDI();
 
-	public function getGroups($search = '', $limit = -1, $offset = 0) {
-		return [];
+		$query = $this->dbConn->getQueryBuilder();
+		$query->select('gid')
+			->from('vo_groups')
+			->orderBy('gid', 'ASC');
+
+		if ($search !== '') {
+			$query->where($query->expr()->iLike('gid', $query->createNamedParameter(
+				'%' . $this->dbConn->escapeLikeParameter($search) . '%'
+			)));
+			$query->orWhere($query->expr()->iLike('displayname', $query->createNamedParameter(
+				'%' . $this->dbConn->escapeLikeParameter($search) . '%'
+			)));
+		}
+
+		$query->setMaxResults($limit)
+			->setFirstResult($offset);
+		$result = $query->execute();
+
+		$groups = [];
+		while ($row = $result->fetch()) {
+			$groups[] = $row['gid'];
+		}
+		$result->closeCursor();
+
+		return $groups;
 	}
 
 	/**
@@ -95,7 +283,29 @@ class GroupBackend extends ABackend implements
 	 * @return bool
 	 */
 	public function groupExists($gid) {
-		return in_array($gid, $this->getGroups($gid, 1));
+		$this->fixDI();
+
+		// Check cache first
+		if (isset($this->groupCache[$gid])) {
+			return true;
+		}
+
+		$qb = $this->dbConn->getQueryBuilder();
+		$cursor = $qb->select('gid', 'displayname')
+			->from('vo_groups')
+			->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
+			->execute();
+		$result = $cursor->fetch();
+		$cursor->closeCursor();
+
+		if ($result !== false) {
+			$this->groupCache[$gid] = [
+				'gid' => $gid,
+				'displayname' => $result['displayname'],
+			];
+			return true;
+		}
+		return false;
 	}
 
 	/**
@@ -107,14 +317,83 @@ class GroupBackend extends ABackend implements
 	 * @return array an array of user ids
 	 */
 	public function usersInGroup($gid, $search = '', $limit = -1, $offset = 0) {
-		return [];
+		$this->fixDI();
+
+		$query = $this->dbConn->getQueryBuilder();
+		$query->select('g.uid')
+			->from('vo_group_user', 'g')
+			->where($query->expr()->eq('gid', $query->createNamedParameter($gid)))
+			->orderBy('g.uid', 'ASC');
+
+		if ($search !== '') {
+			$query->leftJoin('g', 'users', 'u', $query->expr()->eq('g.uid', 'u.uid'))
+				->leftJoin('u', 'preferences', 'p', $query->expr()->andX(
+					$query->expr()->eq('p.userid', 'u.uid'),
+					$query->expr()->eq('p.appid', $query->expr()->literal('settings')),
+					$query->expr()->eq('p.configkey', $query->expr()->literal('email')))
+				)
+				// sqlite doesn't like re-using a single named parameter here
+				->andWhere(
+					$query->expr()->orX(
+						$query->expr()->ilike('g.uid', $query->createNamedParameter('%' . $this->dbConn->escapeLikeParameter($search) . '%')),
+						$query->expr()->ilike('u.displayname', $query->createNamedParameter('%' . $this->dbConn->escapeLikeParameter($search) . '%')),
+						$query->expr()->ilike('p.configvalue', $query->createNamedParameter('%' . $this->dbConn->escapeLikeParameter($search) . '%'))
+					)
+				)
+				->orderBy('u.uid_lower', 'ASC');
+		}
+
+		if ($limit !== -1) {
+			$query->setMaxResults($limit);
+		}
+		if ($offset !== 0) {
+			$query->setFirstResult($offset);
+		}
+
+		$result = $query->execute();
+
+		$users = [];
+		while ($row = $result->fetch()) {
+			$users[] = $row['uid'];
+		}
+		$result->closeCursor();
+
+		return $users;
 	}
 
 	public function getDisplayName(string $gid): string {
-		return $gid;
+		if (isset($this->groupCache[$gid])) {
+			$displayName = $this->groupCache[$gid]['displayname'];
+
+			if (isset($displayName) && trim($displayName) !== '') {
+				return $displayName;
+			}
+		}
+
+		$this->fixDI();
+
+		$query = $this->dbConn->getQueryBuilder();
+		$query->select('displayname')
+			->from('vo_groups')
+			->where($query->expr()->eq('gid', $query->createNamedParameter($gid)));
+
+		$result = $query->execute();
+		$displayName = $result->fetchOne();
+		$result->closeCursor();
+
+		return (string) $displayName;
 	}
 
 	public function getGroupDetails(string $gid): array {
+		$displayName = $this->getDisplayName($gid);
+		if ($displayName !== '') {
+			return ['displayName' => $displayName];
+		}
+
 		return [];
+	}
+
+	public function getBackendName(): string {
+		return 'VO';
 	}
 }

@@ -295,6 +295,7 @@ class LoginController extends Controller {
 
 		$displaynameAttribute = $this->providerService->getSetting($providerId, ProviderService::SETTING_MAPPING_DISPLAYNAME, 'preferred_displayname');
 		$groupsAttribute = $this->providerService->getSetting($providerId, ProviderService::SETTING_MAPPING_GROUPS, 'groups');
+		$regexAttribute = $this->providerService->getSetting($providerId, ProviderService::SETTING_MAPPING_REGEX_PATTERN, '.*');
 
 		$this->logger->debug('Fetching user info endpoint');
 		$options = [
@@ -316,7 +317,13 @@ class LoginController extends Controller {
 		$this->config->setUserValue($this->userId, Application::APP_ID, $clientId . '-groups', implode($groups, "\n"));
 
 		foreach ($groups as $gid) {
-			$this->voService->addVOUser($gid, $this->userId, $clientId);
+			$matches = [];
+			$displayName = $gid;
+			$pattern = "/" . $regexAttribute . "/";
+			if (preg_match($pattern, $gid, $matches)) {
+				$displayName = $matches[1] ?? $matches[0];
+			}
+			$this->voService->addVOUser($gid, $this->userId, $displayName);
 		}
 
 		return new RedirectResponse(

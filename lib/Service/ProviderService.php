@@ -30,6 +30,7 @@ use OCA\VO_Federation\AppInfo\Application;
 use OCP\IConfig;
 
 class ProviderService {
+	public const SETTING_CLIENT_NAME = 'identifier';
 	public const SETTING_CLIENT_ID = 'clientId';
 	public const SETTING_CLIENT_SECRET = 'clientSecret';
 	public const SETTING_AUTHORIZATION_ENDPOINT = 'authorizationEndpoint';
@@ -42,6 +43,7 @@ class ProviderService {
 	public const SETTING_MAPPING_UID_DEFAULT = 'sub';
 	public const SETTING_MAPPING_DISPLAYNAME = 'mappingDisplayName';
 	public const SETTING_MAPPING_GROUPS = 'mappingGroups';
+	public const SETTING_MAPPING_REGEX_PATTERN = 'mappingRegexPattern';
 	public const SETTING_JWKS_CACHE = 'jwksCache';
 	public const SETTING_JWKS_CACHE_TIMESTAMP = 'jwksCacheTimestamp';
 
@@ -112,6 +114,7 @@ class ProviderService {
 
 	private function getSupportedSettings(): array {
 		return [
+			self::SETTING_CLIENT_NAME,
 			self::SETTING_CLIENT_ID,
 			self::SETTING_CLIENT_SECRET,
 			self::SETTING_AUTHORIZATION_ENDPOINT,
@@ -123,6 +126,7 @@ class ProviderService {
 			self::SETTING_MAPPING_UID,
 			self::SETTING_MAPPING_DISPLAYNAME,
 			self::SETTING_MAPPING_GROUPS,
+			self::SETTING_MAPPING_REGEX_PATTERN,
 		];
 	}
 
