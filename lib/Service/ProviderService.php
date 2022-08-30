@@ -52,6 +52,16 @@ class ProviderService {
 		$this->config = $config;
 	}
 
+	public function getProvidersWithSettings(): array {
+		$providerIdLatest = (int) $this->config->getAppValue(Application::APP_ID, 'providerIdLatest', -1);
+		$providers = [];
+		for ($i = 0; $i <= $providerIdLatest;$i++) {
+			$providerSettings = $this->getProviderWithSettings($i);
+			$providers[] = array_merge($providerSettings, ['providerId' => $i]);
+		}
+		return $providers;
+	}
+
 	public function getProviderWithSettings(int $id): array {
 		$providerSettings = $this->getSettings($id);
 		return $providerSettings;

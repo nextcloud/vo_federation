@@ -3,6 +3,7 @@
 namespace OCA\VO_Federation\Settings;
 
 use OCA\VO_Federation\AppInfo\Application;
+use OCA\VO_Federation\Service\ProviderService;
 
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IInitialState;
@@ -25,11 +26,16 @@ class Personal implements ISettings {
 	 */
 	private $userId;
 
+	/** @var ProviderService */
+	private $providerService;
+
 	public function __construct(IConfig $config,
 								IInitialState $initialStateService,
+								ProviderService $providerService,
 								?string $userId) {
 		$this->config = $config;
 		$this->initialStateService = $initialStateService;
+		$this->providerService = $providerService;
 		$this->userId = $userId;
 	}
 
@@ -37,14 +43,26 @@ class Personal implements ISettings {
 	 * @return TemplateResponse
 	 */
 	public function getForm(): TemplateResponse {
-		$displayName = $this->config->getUserValue($this->userId, Application::APP_ID, 'displayName');
-		$groups = $this->config->getUserValue($this->userId, Application::APP_ID, 'groups');
+		$providerIdLatest = (int) $this->config->getAppValue(Application::APP_ID, 'providerIdLatest', -1);
+		$providers = [];
+		for ($i = 0; $i <= $providerIdLatest;$i++) {
+			$providerSettings = $this->providerService->getProviderWithSettings($i);
+			$clientId = $providerSettings['clientId'];
+			if (!$clientId) {
+				continue;
+			}
 
-		$userConfig = [
-			'displayName' => $displayName,
-			'groups' => $groups
-		];
-		$this->initialStateService->provideInitialState('user-config', $userConfig);
+			$displayName = $this->config->getUserValue($this->userId, Application::APP_ID, $clientId . '-displayName', '');
+			$groups = $this->config->getUserValue($this->userId, Application::APP_ID, $clientId . '-groups', '');
+
+			$providers[] = [
+				'providerId' => $i,
+				'clientId' => $clientId,
+				'displayName' => $displayName,
+				'groups' => $groups
+			];
+		}
+		$this->initialStateService->provideInitialState('user-config', $providers);
 
 		Util::addScript(Application::APP_ID, Application::APP_ID . '-personalSettings');
 		return new TemplateResponse(Application::APP_ID, 'personalSettings');

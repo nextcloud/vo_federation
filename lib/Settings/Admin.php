@@ -56,8 +56,8 @@ class Admin implements ISettings {
 	public function getForm() {
 		$this->initialStateService->provideInitialState(
 			Application::APP_ID,
-			'provider',
-			$this->providerService->getProviderWithSettings(0)
+			'providers',
+			$this->providerService->getProvidersWithSettings()
 		);
 		$this->initialStateService->provideInitialState(
 			Application::APP_ID,

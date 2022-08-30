@@ -310,10 +310,10 @@ class LoginController extends Controller {
 
 		$this->logger->info('Userinfo: ' . json_encode($userinfo, JSON_THROW_ON_ERROR));
 
-		$this->config->setUserValue($this->userId, Application::APP_ID, 'accessToken', $data['access_token']);
-		$this->config->setUserValue($this->userId, Application::APP_ID, 'refreshToken', $data['refresh_token']);
-		$this->config->setUserValue($this->userId, Application::APP_ID, 'displayName', $displayName);
-		$this->config->setUserValue($this->userId, Application::APP_ID, 'groups', implode($groups, "\n"));
+		$this->config->setUserValue($this->userId, Application::APP_ID, $clientId . '-accessToken', $data['access_token']);
+		$this->config->setUserValue($this->userId, Application::APP_ID, $clientId . '-refreshToken', $data['refresh_token']);
+		$this->config->setUserValue($this->userId, Application::APP_ID, $clientId . '-displayName', $displayName);
+		$this->config->setUserValue($this->userId, Application::APP_ID, $clientId . '-groups', implode($groups, "\n"));
 
 		foreach ($groups as $gid) {
 			$this->voService->addVOUser($gid, $this->userId, $clientId);

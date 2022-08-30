@@ -4,26 +4,27 @@
 			<a class="icon icon-vo" />
 			{{ t('vo_federation', 'VO Federation') }}
 		</h2>
-		<div class="vo-content">
-			<div v-if="!state.displayName">
-				<button id="aai-oidc" @click="onOAuthClick">
+		<div v-for="provider in state" :key="provider.clientId" class="vo-content">
+			<div v-if="!provider.displayName">
+				<button id="aai-oidc" @click="() => onOAuthClick(provider.providerId)">
 					<span class="icon icon-external" />
-					{{ t('vo_federation', 'Connect to Community AAI') }}
+					{{ t('vo_federation', 'Connect to Community AAI') }}<br>
+					{{ provider.clientId }}
 				</button>
 			</div>
 			<div v-else class="vo-grid-form">
 				<label>
 					<a class="icon icon-checkmark-color" />
-					{{ t('vo_federation', 'Connected as {user}', { user: state.displayName }) }}
+					{{ t('vo_federation', 'Connected as {user}', { user: provider.displayName }) }}
 				</label>
-				<button id="vo-rm-cred" @click="onLogoutClick">
+				<button id="vo-rm-cred" @click="() => onLogoutClick(provider.providerId)">
 					<span class="icon icon-close" />
 					{{ t('vo_federation', 'Disconnect from AAI') }}
 				</button>
 				<div style="grid-column: 1/-1">
 					<label for="vo-groups">VO-Groups</label>
 					<textarea id="vo-groups"
-						v-model="state.groups"
+						v-model="provider.groups"
 						readonly
 						style="width: 100%"
 						rows="10" />
@@ -50,10 +51,7 @@ export default {
 
 	data() {
 		return {
-			state: Object.assign({
-				displayName: '',
-				groups: '',
-			}, loadState('vo_federation', 'user-config')),
+			state: loadState('vo_federation', 'user-config'),
 		}
 	},
 
@@ -70,29 +68,25 @@ export default {
 	},
 
 	methods: {
-		onLogoutClick() {
-			this.state.displayName = ''
-			this.state.groups = ''
-			this.saveOptions({ displayName: this.state.displayName, groups: this.state.groups })
-		},
-		saveOptions(values) {
-			const req = {
-				values,
-			}
-			const url = generateUrl('/apps/vo_federation/config')
-			axios.put(url, req)
+		onLogoutClick(providerId) {
+			const url = generateUrl(`/apps/vo_federation/provider/${providerId}/logout`)
+			axios.post(url)
 				.then((response) => {
-					showSuccess(t('vo_federation', 'VO Federation options saved'))
+					showSuccess(t('vo_federation', 'Logged out successfully'))
+					const providerIndex = this.state.findIndex(provider => provider.providerId === providerId)
+					if (providerIndex > -1) {
+						this.state[providerIndex].displayName = ''
+					}
 				})
 				.catch((error) => {
 					showError(
-						t('vo_federation', 'Failed to save VO Federation options')
+						t('vo_federation', 'Failed logging out')
 						+ ': ' + error.response.request.responseText
 					)
 				})
 		},
-		onOAuthClick() {
-			const url = generateUrl('/apps/vo_federation/login')
+		onOAuthClick(providerId) {
+			const url = generateUrl(`/apps/vo_federation/login/${providerId}`)
 			window.location.replace(url)
 		},
 	},

@@ -17,6 +17,8 @@ use OCP\IConfig;
 use OCP\IL10N;
 use OCP\IRequest;
 use OCP\AppFramework\Http\DataResponse;
+use OCP\AppFramework\Http\JSONResponse;
+use OCP\AppFramework\Http;
 use OCP\AppFramework\Controller;
 
 use OCA\VO_Federation\AppInfo\Application;
@@ -96,9 +98,54 @@ class ConfigController extends Controller {
 		return new DataResponse(1);
 	}
 
-	public function updateProvider(array $values): DataResponse {
-		$providerSettings = $this->providerService->setSettings(0, $values);
+	public function updateProvider(int $providerId, array $values): DataResponse {
+		$providerSettings = $this->providerService->setSettings($providerId, $values);
 
+		return new DataResponse(1);
+	}
+
+
+	public function createProvider(array $values): JSONResponse {
+		$providerId = (int) $this->config->getAppValue(Application::APP_ID, 'providerIdLatest', -1);
+		$this->providerService->setSettings(++$providerId, $values);
+		$this->config->setAppValue(Application::APP_ID, 'providerIdLatest', $providerId);
+
+		return new JSONResponse(array_merge($values, ['providerId' => $providerId]));
+	}
+
+	public function deleteProvider(int $providerId): JSONResponse {
+		$providerIdLatest = (int) $this->config->getAppValue(Application::APP_ID, 'providerIdLatest', -1);
+
+		if ($providerId < 0 || $providerId > $providerIdLatest) {
+			return new JSONResponse([], Http::STATUS_NOT_FOUND);
+		} elseif ($providerId <= $providerIdLatest) {
+			for ($i = $providerId; $i < $providerIdLatest; $i++) {
+				$providerSettingsNext = $this->providerService->getSettings($i + 1);
+				$this->providerService->setSettings($i, $providerSettingsNext);
+			}
+			$this->config->setAppValue(Application::APP_ID, 'providerIdLatest', $providerIdLatest - 1);
+		}
+
+		return new JSONResponse([], Http::STATUS_OK);
+	}
+
+
+	/**
+	 * set config values
+	 * @NoAdminRequired
+	 *
+	 * @param array key/val pairs of config values
+	 * @return DataResponse useless result
+	 */
+	public function logoutProvider(int $providerId): DataResponse {
+		$providerSettings = $this->providerService->getSettings($providerId);
+		$clientId = $providerSettings['clientId'];
+		if ($clientId) {
+			$this->config->deleteUserValue($this->userId, Application::APP_ID, $clientId . '-accessToken');
+			$this->config->deleteUserValue($this->userId, Application::APP_ID, $clientId . '-refreshToken');
+			$this->config->deleteUserValue($this->userId, Application::APP_ID, $clientId . '-displayName');
+			$this->config->deleteUserValue($this->userId, Application::APP_ID, $clientId . '-groups');
+		}
 		return new DataResponse(1);
 	}
 }
