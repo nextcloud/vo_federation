@@ -2,5 +2,6 @@
 
 namespace OCA\VO_Federation\Vendor\Firebase\JWT;
 
-class SignatureInvalidException extends \UnexpectedValueException {
+class SignatureInvalidException extends \UnexpectedValueException
+{
 }

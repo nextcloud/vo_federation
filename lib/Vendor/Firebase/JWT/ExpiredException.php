@@ -2,5 +2,6 @@
 
 namespace OCA\VO_Federation\Vendor\Firebase\JWT;
 
-class ExpiredException extends \UnexpectedValueException {
+class ExpiredException extends \UnexpectedValueException
+{
 }
