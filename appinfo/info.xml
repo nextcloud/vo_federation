@@ -19,9 +19,9 @@ VO Federation enhances existing federation features by allowing Community AAIs t
         <nextcloud min-version="25" max-version="25"/>
     </dependencies>
     <settings>
-        <personal>OCA\VO_Federation\Settings\Personal</personal>
-        <personal-section>OCA\VO_Federation\Settings\PersonalSection</personal-section>
         <admin>OCA\VO_Federation\Settings\Admin</admin>
         <admin-section>OCA\VO_Federation\Settings\AdminSection</admin-section>
+        <personal>OCA\VO_Federation\Settings\Personal</personal>
+        <personal-section>OCA\VO_Federation\Settings\PersonalSection</personal-section>
     </settings>
 </info>
