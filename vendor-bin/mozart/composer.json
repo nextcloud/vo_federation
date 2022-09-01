@@ -1,4 +1,9 @@
 {
+    "config": {
+        "platform": {
+          "php": "7.4"
+        }
+    },
     "require": {
         "coenjacobs/mozart": "^0.7.1"
     }
