@@ -32,6 +32,7 @@ use OCP\Group\Backend\IDeleteGroupBackend;
 use OCP\Group\Backend\IAddToGroupBackend;
 use OCP\Group\Backend\IRemoveFromGroupBackend;
 use OCP\Group\Backend\INamedBackend;
+use OCP\Group\Backend\IVirtualOrganisationBackend;
 use OCP\IDBConnection;
 use OCP\ILogger;
 
@@ -44,7 +45,8 @@ class GroupBackend extends ABackend implements
 	IDeleteGroupBackend,
 	IAddToGroupBackend,
 	IRemoveFromGroupBackend,
-	INamedBackend {
+	INamedBackend,
+	IVirtualOrganisationBackend {
 
 	/**
 	 * @var string The application name.
@@ -395,5 +397,9 @@ class GroupBackend extends ABackend implements
 
 	public function getBackendName(): string {
 		return 'VO';
+	}
+
+	public function isVirtualOrganisation(string $groupId): bool {
+		return strpos( $groupId , 'urn' ) === 0;
 	}
 }
