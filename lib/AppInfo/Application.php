@@ -11,12 +11,16 @@
 namespace OCA\VO_Federation\AppInfo;
 
 use OCA\VO_Federation\Backend\GroupBackend;
-
+use OCA\VO_Federation\FederatedGroupShareProvider;
+use OCA\VO_Federation\OCM\CloudGroupFederationProviderFiles;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
+use OCP\AppFramework\IAppContainer;
+use OCP\Federation\ICloudFederationProviderManager;
 use OCP\IGroupManager;
+use OCP\Share\IManager;
 
 /**
  * Class Application
@@ -42,9 +46,18 @@ class Application extends App implements IBootstrap {
 	public function boot(IBootContext $context): void {
 		$context->injectFn(function (
 			IGroupManager $groupManager,
-			GroupBackend $groupBackend
+			GroupBackend $groupBackend,
+			IManager $shareManager,
+			ICloudFederationProviderManager $federationProviderManager,
+			IAppContainer $appContainer
 		) {
 			$groupManager->addBackend($groupBackend);
+			$shareManager->registerShareProvider(FederatedGroupShareProvider::class);
+			$federationProviderManager->addCloudFederationProviderForShareType('file-federated_group', 'file', ['federated_group'],
+				'Federated Files Sharing (federated_group)',
+				function () use ($appContainer): CloudGroupFederationProviderFiles {
+					return $appContainer->get(CloudGroupFederationProviderFiles::class);
+				});
 		});
 	}
 }

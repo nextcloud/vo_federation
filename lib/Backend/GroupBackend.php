@@ -32,7 +32,7 @@ use OCP\Group\Backend\IDeleteGroupBackend;
 use OCP\Group\Backend\IAddToGroupBackend;
 use OCP\Group\Backend\IRemoveFromGroupBackend;
 use OCP\Group\Backend\INamedBackend;
-use OCP\Group\Backend\IVirtualOrganisationBackend;
+use OCP\Group\Backend\IFederationGroupBackend;
 use OCP\IDBConnection;
 use OCP\ILogger;
 
@@ -46,7 +46,7 @@ class GroupBackend extends ABackend implements
 	IAddToGroupBackend,
 	IRemoveFromGroupBackend,
 	INamedBackend,
-	IVirtualOrganisationBackend {
+	IFederationGroupBackend {
 
 	/**
 	 * @var string The application name.
@@ -389,7 +389,7 @@ class GroupBackend extends ABackend implements
 	public function getGroupDetails(string $gid): array {
 		$displayName = $this->getDisplayName($gid);
 		if ($displayName !== '') {
-			return ['displayName' => $displayName];
+			return ['displayName' => $displayName, 'shareWithDescription' => 'AAI'];
 		}
 
 		return [];
@@ -399,7 +399,7 @@ class GroupBackend extends ABackend implements
 		return 'VO';
 	}
 
-	public function isVirtualOrganisation(string $groupId): bool {
-		return strpos( $groupId , 'urn' ) === 0;
+	public function isFederatedGroup(string $groupId): bool {
+		return strpos($groupId , 'urn') === 0;
 	}
 }
