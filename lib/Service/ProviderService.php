@@ -44,6 +44,7 @@ class ProviderService {
 	public const SETTING_MAPPING_DISPLAYNAME = 'mappingDisplayName';
 	public const SETTING_MAPPING_GROUPS = 'mappingGroups';
 	public const SETTING_MAPPING_REGEX_PATTERN = 'mappingRegexPattern';
+	public const SETTING_TRUSTED_INSTANCES = 'trustedInstances';
 	public const SETTING_JWKS_CACHE = 'jwksCache';
 	public const SETTING_JWKS_CACHE_TIMESTAMP = 'jwksCacheTimestamp';
 
@@ -127,10 +128,14 @@ class ProviderService {
 			self::SETTING_MAPPING_DISPLAYNAME,
 			self::SETTING_MAPPING_GROUPS,
 			self::SETTING_MAPPING_REGEX_PATTERN,
+			self::SETTING_TRUSTED_INSTANCES,
 		];
 	}
 
 	private function convertFromJSON(string $key, $value): string {
+		if ($key === self::SETTING_TRUSTED_INSTANCES) {
+			$value = json_encode($value);
+		}
 		//if ($key === self::SETTING_UNIQUE_UID || $key === self::SETTING_CHECK_BEARER) {
 		//	$value = $value ? '1' : '0';
 		//}
@@ -142,6 +147,51 @@ class ProviderService {
 		//if ($key === self::SETTING_UNIQUE_UID || $key === self::SETTING_CHECK_BEARER) {
 		//	return $value === '1';
 		//}
+		if ($key === self::SETTING_TRUSTED_INSTANCES) {
+			return json_decode($value);
+		}
 		return (string)$value;
+	}
+
+	private $settingsCache = [];
+
+	public function getSettingClientNameForClientId($clientId) {
+		if (isset($this->settingsCache[$clientId])) {
+			$displayName = $this->settingsCache[$clientId][self::SETTING_CLIENT_NAME];
+
+			if (isset($displayName) && trim($displayName) !== '') {
+				return $displayName;
+			}
+		}
+
+		$providers = $this->getProvidersWithSettings();
+		foreach ($providers as $provider) {
+			if ($provider[self::SETTING_CLIENT_ID] === $clientId) {
+				$displayName = $provider[self::SETTING_CLIENT_NAME];
+				$this->settingsCache[$clientId][self::SETTING_CLIENT_NAME] = $displayName;
+				return $displayName;
+			}
+		}
+		return '';
+	}
+
+	public function getSettingTrustedInstancesForClientId($clientId) {
+		if (isset($this->settingsCache[$clientId])) {
+			$trustedInstances = $this->settingsCache[$clientId][self::SETTING_TRUSTED_INSTANCES];
+
+			if (is_array($trustedInstances)) {
+				return $trustedInstances;
+			}
+		}
+
+		$providers = $this->getProvidersWithSettings();
+		foreach ($providers as $provider) {
+			if ($provider[self::SETTING_CLIENT_ID] === $clientId) {
+				$trustedInstances = $provider[self::SETTING_TRUSTED_INSTANCES];
+				$this->settingsCache[$clientId][self::SETTING_TRUSTED_INSTANCES] = $trustedInstances;
+				return $trustedInstances;
+			}
+		}
+		return [];
 	}
 }

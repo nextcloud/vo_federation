@@ -25,8 +25,8 @@ class VirtualOrganisationService {
 		$this->voGroupBackend = $voGroupBackend;
 	}
 
-	public function addVOUser($gid, $userId, $displayName) {
-		$this->voGroupBackend->createGroup($gid, $displayName);
+	public function addVOUser($gid, $userId, $displayName, $aai) {
+		$this->voGroupBackend->createVOGroup($gid, $displayName, $aai);
 		$group = $this->groupManager->get($gid);
 		$group->addUser($this->userManager->get($userId));
 	}

@@ -43,7 +43,6 @@
     "require-dev": {
         "nextcloud/coding-standard": "^1.0.0",
         "phpunit/phpunit": "^9.5",
-        "christophwurst/nextcloud": "dev-master",
         "vimeo/psalm": "^4.19",
         "symfony/event-dispatcher": "^4"
     },

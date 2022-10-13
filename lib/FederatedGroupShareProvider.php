@@ -39,6 +39,8 @@ namespace OCA\VO_Federation;
 
 use OC\Share20\Exception\InvalidShare;
 use OC\Share20\Share;
+use OCA\VO_Federation\Backend\GroupBackend;
+use OCA\VO_Federation\Service\ProviderService;
 use OCP\Constants;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\Federation\ICloudFederationProviderManager;
@@ -107,6 +109,10 @@ class FederatedGroupShareProvider implements IShareProvider {
 	/** @var array list of supported share types */
 	private $supportedShareType = [IShare::TYPE_FEDERATED_GROUP];
 
+	private GroupBackend $groupBackend;
+	
+	private ProviderService $providerService;
+
 	/**
 	 * DefaultShareProvider constructor.
 	 *
@@ -135,7 +141,9 @@ class FederatedGroupShareProvider implements IShareProvider {
 			IUserManager $userManager,
 			ICloudIdManager $cloudIdManager,
 			\OCP\GlobalScale\IConfig $globalScaleConfig,
-			ICloudFederationProviderManager $cloudFederationProviderManager
+			ICloudFederationProviderManager $cloudFederationProviderManager,
+			GroupBackend $groupBackend,
+			ProviderService $providerService
 	) {
 		$this->dbConnection = $connection;
 		$this->addressHandler = $addressHandler;
@@ -149,6 +157,8 @@ class FederatedGroupShareProvider implements IShareProvider {
 		$this->cloudIdManager = $cloudIdManager;
 		$this->gsConfig = $globalScaleConfig;
 		$this->cloudFederationProviderManager = $cloudFederationProviderManager;
+		$this->groupBackend = $groupBackend;
+		$this->providerService = $providerService;
 	}
 
 	/**
@@ -186,72 +196,94 @@ class FederatedGroupShareProvider implements IShareProvider {
 			throw new \Exception($message_t);
 		}
 
-		/*
-		 * Check if file is not already shared with the remote user
-		 */
-		$alreadyShared = $this->getSharedWith($shareWith, IShare::TYPE_FEDERATED_GROUP, $share->getNode(), 1, 0);
-		if (!empty($alreadyShared)) {
-			$message = 'Sharing %1$s failed, because this item is already shared with %2$s';
-			$message_t = $this->l->t('Sharing %1$s failed, because this item is already shared with user %2$s', [$share->getNode()->getName(), $shareWith]);
-			$this->logger->debug(sprintf($message, $share->getNode()->getName(), $shareWith), ['app' => 'Federated File Sharing']);
-			throw new \Exception($message_t);
+		$aai = $this->groupBackend->getAAI($shareWith);
+		$trustedInstances = $this->providerService->getSettingTrustedInstancesForClientId($aai);
+		if (empty($aai)) {
+			$message = 'Cannot find Community AAI for Group Id';
+			throw new \Exception($message);
+		} elseif (empty($trustedInstances)) {
+			$message = 'No trusted instances configured for Community AAI';
+			throw new \Exception($message);
 		}
 
+		$firstShareId = null;
+		foreach ($trustedInstances as $url) {
+			$currentShareWith = $shareWith . '@' . $url;
 
-		// don't allow federated shares if source and target server are the same
-		$cloudId = $this->cloudIdManager->resolveCloudId($shareWith);
-		$currentServer = $this->addressHandler->generateRemoteURL();
-		$currentUser = $sharedBy;
-		if ($this->addressHandler->compareAddresses($cloudId->getUser(), $cloudId->getRemote(), $currentUser, $currentServer)) {
-			$message = 'Not allowed to create a federated share with the same user.';
-			$message_t = $this->l->t('Not allowed to create a federated share with the same user');
-			$this->logger->debug($message, ['app' => 'Federated File Sharing']);
-			throw new \Exception($message_t);
-		}
-
-		// Federated shares always have read permissions
-		if (($share->getPermissions() & Constants::PERMISSION_READ) === 0) {
-			$message = 'Federated shares require read permissions';
-			$message_t = $this->l->t('Federated shares require read permissions');
-			$this->logger->debug($message, ['app' => 'Federated File Sharing']);
-			throw new \Exception($message_t);
-		}
-
-		$share->setSharedWith($cloudId->getId());
-
-		try {
-			$remoteShare = $this->getShareFromExternalShareTable($share);
-		} catch (ShareNotFound $e) {
-			$remoteShare = null;
-		}
-
-		if ($remoteShare) {
-			try {
-				$ownerCloudId = $this->cloudIdManager->getCloudId($remoteShare['owner'], $remoteShare['remote']);
-				$shareId = $this->addShareToDB($itemSource, $itemType, $shareWith, $sharedBy, $ownerCloudId->getId(), $permissions, 'tmp_token_' . time(), $shareType, $expirationDate);
-				$share->setId($shareId);
-				[$token, $remoteId] = $this->askOwnerToReShare($shareWith, $share, $shareId);
-				// remote share was create successfully if we get a valid token as return
-				$send = is_string($token) && $token !== '';
-			} catch (\Exception $e) {
-				// fall back to old re-share behavior if the remote server
-				// doesn't support flat re-shares (was introduced with Nextcloud 9.1)
-				$this->removeShareFromTable($share);
-				$shareId = $this->createFederatedShare($share);
-			}
-			if ($send) {
-				$this->updateSuccessfulReshare($shareId, $token);
-				$this->storeRemoteId($shareId, $remoteId);
-			} else {
-				$this->removeShareFromTable($share);
-				$message_t = $this->l->t('File is already shared with %s', [$shareWith]);
+			/*
+			* Check if file is not already shared with the remote user
+			*/
+			$alreadyShared = $this->getSharedWith($currentShareWith, IShare::TYPE_FEDERATED_GROUP, $share->getNode(), 1, 0);
+			if (!empty($alreadyShared)) {
+				$message = 'Sharing %1$s failed, because this item is already shared with %2$s';
+				$message_t = $this->l->t('Sharing %1$s failed, because this item is already shared with user %2$s', [$share->getNode()->getName(), $shareWith]);
+				$this->logger->debug(sprintf($message, $share->getNode()->getName(), $currentShareWith), ['app' => 'Federated File Sharing']);
 				throw new \Exception($message_t);
 			}
-		} else {
-			$shareId = $this->createFederatedShare($share);
+
+			// don't allow federated shares if source and target server are the same
+			$cloudId = $this->cloudIdManager->resolveCloudId($currentShareWith, false);
+			$currentServer = $this->addressHandler->generateRemoteURL();
+			$currentUser = $sharedBy;
+			if ($this->addressHandler->compareAddresses($cloudId->getUser(), $cloudId->getRemote(), $currentUser, $currentServer)) {
+				$message = 'Not allowed to create a federated share with the same user.';
+				$message_t = $this->l->t('Not allowed to create a federated share with the same user');
+				$this->logger->debug($message, ['app' => 'Federated File Sharing']);
+				throw new \Exception($message_t);
+			}
+
+			// Federated shares always have read permissions
+			if (($share->getPermissions() & Constants::PERMISSION_READ) === 0) {
+				$message = 'Federated shares require read permissions';
+				$message_t = $this->l->t('Federated shares require read permissions');
+				$this->logger->debug($message, ['app' => 'Federated File Sharing']);
+				throw new \Exception($message_t);
+			}
+
+			$share->setSharedWith($cloudId->getId());
+
+			try {
+				$remoteShare = $this->getShareFromExternalShareTable($share);
+			} catch (ShareNotFound $e) {
+				$remoteShare = null;
+			}
+
+			if ($remoteShare) {
+				$message = 'Re-sharing is not supported';
+				throw new \Exception($message);
+			}
+
+			// if ($remoteShare) {
+			// 	try {
+			// 		$ownerCloudId = $this->cloudIdManager->getCloudId($remoteShare['owner'], $remoteShare['remote']);
+			// 		$shareId = $this->addShareToDB($itemSource, $itemType, $shareWith, $sharedBy, $ownerCloudId->getId(), $permissions, 'tmp_token_' . time(), $shareType, $expirationDate);
+			// 		$share->setId($shareId);
+			// 		[$token, $remoteId] = $this->askOwnerToReShare($shareWith, $share, $shareId);
+			// 		// remote share was create successfully if we get a valid token as return
+			// 		$send = is_string($token) && $token !== '';
+			// 	} catch (\Exception $e) {
+			// 		// fall back to old re-share behavior if the remote server
+			// 		// doesn't support flat re-shares (was introduced with Nextcloud 9.1)
+			// 		$this->removeShareFromTable($share);
+			// 		$shareId = $this->createFederatedShare($share);
+			// 	}
+			// 	if ($send) {
+			// 		$this->updateSuccessfulReshare($shareId, $token);
+			// 		$this->storeRemoteId($shareId, $remoteId);
+			// 	} else {
+			// 		$this->removeShareFromTable($share);
+			// 		$message_t = $this->l->t('File is already shared with %s', [$shareWith]);
+			// 		throw new \Exception($message_t);
+			// 	}
+			// } else {
+			// 	$shareId = $this->createFederatedShare($share);
+			// }
+
+			$currentShareId = $this->createFederatedShare($share);
+			$firstShareId = is_null($firstShareId) ? $currentShareId : $firstShareId;
 		}
 
-		$data = $this->getRawShare($shareId);
+		$data = $this->getRawShare($firstShareId);
 		return $this->createShareObject($data);
 	}
 

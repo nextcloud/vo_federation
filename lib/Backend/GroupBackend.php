@@ -25,6 +25,7 @@
 namespace OCA\VO_Federation\Backend;
 
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use OCA\VO_Federation\Service\ProviderService;
 use OCP\Group\Backend\ABackend;
 use OCP\Group\Backend\IGetDisplayNameBackend;
 use OCP\Group\Backend\IGroupDetailsBackend;
@@ -63,10 +64,13 @@ class GroupBackend extends ABackend implements
 	/** @var IDBConnection */
 	private $dbConn;
 
-	public function __construct($AppName, ILogger $logger, IDBConnection $dbConn = null) {
+	private ProviderService $providerService;
+
+	public function __construct($AppName, ILogger $logger, IDBConnection $dbConn = null, ProviderService $providerService) {
 		$this->appName = $AppName;
 		$this->logger = $logger;
 		$this->dbConn = $dbConn;
+		$this->providerService = $providerService;
 	}
 
 	private function fixDI() {
@@ -104,6 +108,20 @@ class GroupBackend extends ABackend implements
 		];
 
 		return $result === 1;
+	}
+
+	public function createVOGroup(string $gid, string $displayName, string $aai): bool {
+		$result = $this->createGroup($gid, $displayName);
+
+		$qb = $this->dbConn->getQueryBuilder();
+		$qb->update('vo_groups')
+			->set('aai', $qb->createNamedParameter($aai))
+			->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
+			->executeStatement();
+
+		$this->groupCache[$gid]['aai'] = $aai;
+
+		return $result;
 	}
 
 	/**
@@ -221,7 +239,7 @@ class GroupBackend extends ABackend implements
 
 		// No magic!
 		$qb = $this->dbConn->getQueryBuilder();
-		$cursor = $qb->select('gu.gid', 'g.displayname')
+		$cursor = $qb->select('gu.gid', 'g.displayname', 'g.aai')
 			->from('vo_group_user', 'gu')
 			->leftJoin('gu', 'vo_groups', 'g', $qb->expr()->eq('gu.gid', 'g.gid'))
 			->where($qb->expr()->eq('uid', $qb->createNamedParameter($uid)))
@@ -233,6 +251,7 @@ class GroupBackend extends ABackend implements
 			$this->groupCache[$row['gid']] = [
 				'gid' => $row['gid'],
 				'displayname' => $row['displayname'],
+				'aai' => $row['aai'],
 			];
 		}
 		$cursor->closeCursor();
@@ -293,7 +312,7 @@ class GroupBackend extends ABackend implements
 		}
 
 		$qb = $this->dbConn->getQueryBuilder();
-		$cursor = $qb->select('gid', 'displayname')
+		$cursor = $qb->select('gid', 'displayname', 'aai')
 			->from('vo_groups')
 			->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
 			->execute();
@@ -304,6 +323,7 @@ class GroupBackend extends ABackend implements
 			$this->groupCache[$gid] = [
 				'gid' => $gid,
 				'displayname' => $result['displayname'],
+				'aai' => $result['aai'],
 			];
 			return true;
 		}
@@ -386,13 +406,42 @@ class GroupBackend extends ABackend implements
 		return (string) $displayName;
 	}
 
-	public function getGroupDetails(string $gid): array {
-		$displayName = $this->getDisplayName($gid);
-		if ($displayName !== '') {
-			return ['displayName' => $displayName, 'shareWithDescription' => 'AAI'];
+	public function getAAI(string $gid): string {
+		if (isset($this->groupCache[$gid])) {
+			$aai = $this->groupCache[$gid]['aai'];
+
+			if (isset($aai) && trim($aai) !== '') {
+				return $aai;
+			}
 		}
 
-		return [];
+		$this->fixDI();
+
+		$query = $this->dbConn->getQueryBuilder();
+		$query->select('aai')
+			->from('vo_groups')
+			->where($query->expr()->eq('gid', $query->createNamedParameter($gid)));
+
+		$result = $query->execute();
+		$aai = $result->fetchOne();
+		$result->closeCursor();
+
+		return (string) $aai;
+	}
+
+	public function getGroupDetails(string $gid): array {
+		$details = [];
+
+		$displayName = $this->getDisplayName($gid);
+		$aai = $this->getAAI($gid);
+		if ($displayName !== '') {
+			$details['displayName'] = $displayName;
+		}
+		if ($aai !== '') {
+			$details['shareWithDescription'] = $this->providerService->getSettingClientNameForClientId($aai);
+		}
+
+		return $details;
 	}
 
 	public function getBackendName(): string {
@@ -400,6 +449,6 @@ class GroupBackend extends ABackend implements
 	}
 
 	public function isFederatedGroup(string $groupId): bool {
-		return strpos($groupId , 'urn') === 0;
+		return strpos($groupId, 'urn') === 0;
 	}
 }

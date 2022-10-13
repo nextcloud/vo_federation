@@ -323,7 +323,7 @@ class LoginController extends Controller {
 			if (preg_match($pattern, $gid, $matches)) {
 				$displayName = $matches[1] ?? $matches[0];
 			}
-			$this->voService->addVOUser($gid, $this->userId, $displayName);
+			$this->voService->addVOUser($gid, $this->userId, $displayName, $clientId);
 		}
 
 		return new RedirectResponse(

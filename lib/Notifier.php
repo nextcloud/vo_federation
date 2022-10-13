@@ -179,7 +179,7 @@ class Notifier implements INotifier {
 	 */
 	protected function createRemoteUser($cloudId, $displayName = null) {
 		try {
-			$resolvedId = $this->cloudIdManager->resolveCloudId($cloudId);
+			$resolvedId = $this->cloudIdManager->resolveCloudId($cloudId, false);
 			if ($displayName === null) {
 				$displayName = $this->getDisplayName($resolvedId);
 			}

@@ -56,15 +56,12 @@
 			</div>
 		</div>
 
-		<Modal v-if="editProvider !== null" :can-close="false">
+		<Modal v-if="editProvider !== null" :can-close="false" :title="modalTitle">
 			<div class="providermodal__wrapper">
-				<h3 v-if="editProvider.providerId == null">
-					{{ t('user_oids', 'Register a new provider') }}
-				</h3>
-				<h3 v-else v-once>
-					Edit {{ editProvider.clientId }}
-				</h3>
 				<form ref="providerForm" class="provider-edit" @submit.prevent="onSubmit">
+					<h3 style="font-weight: bold">
+						{{ t('vo_federation', 'OIDC settings') }}
+					</h3>
 					<p>
 						<label for="oidc-client-id">{{ t('vo_federation', 'Name') }}</label>
 						<input id="oidc-client-identifier"
@@ -153,6 +150,36 @@
 							type="text"
 							placeholder=".*">
 					</p>
+					<h3 style="font-weight: bold">
+						{{ t('vo_federation', 'Trusted instances') }}
+					</h3>
+					<ul v-if="Array.isArray(editProvider.trustedInstances) && editProvider.trustedInstances.length > 0"
+						style="width: 320px">
+						<ListItem v-for="(instance, idx) in editProvider.trustedInstances"
+							:key="idx"
+							:title="instance"
+							force-display-actions
+							compact>
+							<template #actions>
+								<ActionButton icon="icon-delete" @click="editProvider.trustedInstances.splice(idx, 1)">
+									{{ t('vo_federation', 'Remove') }}
+								</ActionButton>
+							</template>
+						</ListItem>
+					</ul>
+					<div style="display: flex; align-items: center;">
+						<button v-if="!addingTrustedInstance" @click="addingTrustedInstance = !addingTrustedInstance">
+							{{ t('vo_federation', '+ Add trusted instance') }}
+						</button>
+						<p v-else style="display: flex; align-items: center">
+							<input ref="newInstance"
+								type="url"
+								placeholder="https://example.com">
+							<button @click="addTrustedInstance">
+								{{ t('vo_federation', 'Add') }}
+							</button>
+						</p>
+					</div>
 					<fieldset style="margin-top: 10px">
 						<input type="button" :value="t('vo_federation', 'Cancel')" @click="editProvider = null">
 						<input type="submit" :value="t('vo_federation', 'Update')">
@@ -170,6 +197,7 @@ import { generateUrl } from '@nextcloud/router'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import Actions from '@nextcloud/vue/dist/Components/Actions'
 import ActionButton from '@nextcloud/vue/dist/Components/ActionButton'
+import ListItem from '@nextcloud/vue/dist/Components/ListItem'
 import Modal from '@nextcloud/vue/dist/Components/Modal'
 
 const provider = {
@@ -185,6 +213,7 @@ const provider = {
 	mappingUid: '',
 	mappingDisplayName: '',
 	mappingGroups: '',
+	trustedInstances: [],
 }
 
 export default {
@@ -193,12 +222,21 @@ export default {
 		Actions,
 		ActionButton,
 		Modal,
+		ListItem,
 	},
 	data() {
 		return {
 			providers: loadState('vo_federation', 'providers'),
 			editProvider: null,
+			addingTrustedInstance: false,
 		}
+	},
+	computed: {
+		modalTitle() {
+			return this.editProvider.providerId != null
+				? this.editProvider.clientId
+				: t('user_oids', 'Register a new provider')
+		},
 	},
 	methods: {
 		async onSubmit() {
@@ -248,7 +286,14 @@ export default {
 			}
 		},
 		addNewProvider() {
-			this.editProvider = { ...provider }
+			this.editProvider = JSON.parse(JSON.stringify(provider))
+		},
+		addTrustedInstance() {
+			const elem = this.$refs.newInstance
+			if (elem.checkValidity()) {
+				this.editProvider.trustedInstances.push(elem.value)
+				this.addingTrustedInstance = false
+			}
 		},
 	},
 }
@@ -265,6 +310,7 @@ h2 .action-item {
 }
 
 .provider-edit p input[type=text],
+.provider-edit p input[type=url],
 .provider-edit p input[type=password] {
 	width: 100%;
 	min-width: 200px;
@@ -273,7 +319,7 @@ h2 .action-item {
 
 h3 {
 	font-weight: bold;
-	padding-bottom: 12px;
+	/*padding-bottom: 12px;*/
 }
 
 .oidcproviders {

@@ -72,7 +72,7 @@ class AddressHandler {
 	 */
 	public function splitUserRemote($address) {
 		try {
-			$cloudId = $this->cloudIdManager->resolveCloudId($address);
+			$cloudId = $this->cloudIdManager->resolveCloudId($address, false);
 			return [$cloudId->getUser(), $cloudId->getRemote()];
 		} catch (\InvalidArgumentException $e) {
 			$hint = $this->l->t('Invalid Federated Cloud ID');

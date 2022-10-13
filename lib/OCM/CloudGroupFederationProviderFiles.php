@@ -226,28 +226,28 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 			}
 
 			// FIXME this should be a method in the user management instead
-			if ($shareType === IShare::TYPE_USER) {
-				$this->logger->debug('shareWith before, ' . $shareWith, ['app' => 'files_sharing']);
-				Util::emitHook(
-					'\OCA\Files_Sharing\API\Server2Server',
-					'preLoginNameUsedAsUserName',
-					['uid' => &$shareWith]
-				);
-				$this->logger->debug('shareWith after, ' . $shareWith, ['app' => 'files_sharing']);
+			// if ($shareType === IShare::TYPE_USER) {
+			// 	$this->logger->debug('shareWith before, ' . $shareWith, ['app' => 'files_sharing']);
+			// 	Util::emitHook(
+			// 		'\OCA\Files_Sharing\API\Server2Server',
+			// 		'preLoginNameUsedAsUserName',
+			// 		['uid' => &$shareWith]
+			// 	);
+			// 	$this->logger->debug('shareWith after, ' . $shareWith, ['app' => 'files_sharing']);
 
-				if (!$this->userManager->userExists($shareWith)) {
-					throw new ProviderCouldNotAddShareException('User does not exists', '',Http::STATUS_BAD_REQUEST);
-				}
+			// 	if (!$this->userManager->userExists($shareWith)) {
+			// 		throw new ProviderCouldNotAddShareException('User does not exists', '',Http::STATUS_BAD_REQUEST);
+			// 	}
 
-				\OC_Util::setupFS($shareWith);
-			}
+			// 	\OC_Util::setupFS($shareWith);
+			// }
 
-			if ($shareType === IShare::TYPE_GROUP && !$this->groupManager->groupExists($shareWith)) {
-				throw new ProviderCouldNotAddShareException('Group does not exists', '',Http::STATUS_BAD_REQUEST);
-			}
+			// if ($shareType === IShare::TYPE_GROUP && !$this->groupManager->groupExists($shareWith)) {
+			// 	throw new ProviderCouldNotAddShareException('Group does not exists', '',Http::STATUS_BAD_REQUEST);
+			// }
 
 			try {
-				$this->externalShareManager->addShare($remote, $token, '', $name, $owner, $shareType,false, $shareWith, $remoteId);
+				$this->externalShareManager->addShare($remote, $token, '', $name, $owner, $shareType, false, $shareWith, $remoteId);
 				$shareId = \OC::$server->getDatabaseConnection()->lastInsertId('*PREFIX*share_external');
 
 				if ($shareType === IShare::TYPE_USER) {
@@ -260,16 +260,19 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 					\OC::$server->getActivityManager()->publish($event);
 					$this->notifyAboutNewShare($shareWith, $shareId, $ownerFederatedId, $sharedByFederatedId, $name);
 				} else {
-					$groupMembers = $this->groupManager->get($shareWith)->getUsers();
-					foreach ($groupMembers as $user) {
-						$event = $this->activityManager->generateEvent();
-						$event->setApp('files_sharing')
-							->setType('remote_share')
-							->setSubject(RemoteShares::SUBJECT_REMOTE_SHARE_RECEIVED, [$ownerFederatedId, trim($name, '/')])
-							->setAffectedUser($user->getUID())
-							->setObject('remote_share', $shareId, $name);
-						\OC::$server->getActivityManager()->publish($event);
-						$this->notifyAboutNewShare($user->getUID(), $shareId, $ownerFederatedId, $sharedByFederatedId, $name);
+					$group = $this->groupManager->get($shareWith);
+					if (!is_null($group)) {
+						$groupMembers = $group->getUsers();
+						foreach ($groupMembers as $user) {
+							$event = $this->activityManager->generateEvent();
+							$event->setApp('files_sharing')
+								->setType('remote_share')
+								->setSubject(RemoteShares::SUBJECT_REMOTE_SHARE_RECEIVED, [$ownerFederatedId, trim($name, '/')])
+								->setAffectedUser($user->getUID())
+								->setObject('remote_share', $shareId, $name);
+							\OC::$server->getActivityManager()->publish($event);
+							$this->notifyAboutNewShare($user->getUID(), $shareId, $ownerFederatedId, $sharedByFederatedId, $name);
+						}
 					}
 				}
 				return $shareId;
@@ -328,7 +331,7 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 	 */
 	private function mapShareTypeToNextcloud($shareType) {
 		$result = IShare::TYPE_USER;
-		if ($shareType === 'group') {
+		if ($shareType === 'group' || $shareType === 'federated_group') {
 			$result = IShare::TYPE_GROUP;
 		}
 
@@ -378,13 +381,13 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 
 		$token = $notification['sharedSecret'];
 
-		$share = $this->federatedShareProvider->getShareById($id);
+		$share = $this->federatedGroupShareProvider->getShareById($id);
 
 		$this->verifyShare($share, $token);
 		$this->executeAcceptShare($share);
 		if ($share->getShareOwner() !== $share->getSharedBy()) {
 			[, $remote] = $this->addressHandler->splitUserRemote($share->getSharedBy());
-			$remoteId = $this->federatedShareProvider->getRemoteId($share);
+			$remoteId = $this->federatedGroupShareProvider->getRemoteId($share);
 			$notification = $this->cloudFederationFactory->getCloudFederationNotification();
 			$notification->setMessage(
 				'SHARE_ACCEPTED',
@@ -448,13 +451,13 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 
 		$token = $notification['sharedSecret'];
 
-		$share = $this->federatedShareProvider->getShareById($id);
+		$share = $this->federatedGroupShareProvider->getShareById($id);
 
 		$this->verifyShare($share, $token);
 
 		if ($share->getShareOwner() !== $share->getSharedBy()) {
 			[, $remote] = $this->addressHandler->splitUserRemote($share->getSharedBy());
-			$remoteId = $this->federatedShareProvider->getRemoteId($share);
+			$remoteId = $this->federatedGroupShareProvider->getRemoteId($share);
 			$notification = $this->cloudFederationFactory->getCloudFederationNotification();
 			$notification->setMessage(
 				'SHARE_DECLINED',
@@ -481,7 +484,7 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 	 * @throws ShareNotFound
 	 */
 	protected function executeDeclineShare(IShare $share) {
-		$this->federatedShareProvider->removeShareFromTable($share);
+		$this->federatedGroupShareProvider->removeShareFromTable($share);
 
 		try {
 			$fileId = (int)$share->getNode()->getId();
@@ -515,10 +518,10 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 		}
 		$token = $notification['sharedSecret'];
 
-		$share = $this->federatedShareProvider->getShareById($id);
+		$share = $this->federatedGroupShareProvider->getShareById($id);
 
 		$this->verifyShare($share, $token);
-		$this->federatedShareProvider->removeShareFromTable($share);
+		$this->federatedGroupShareProvider->removeShareFromTable($share);
 		return [];
 	}
 
@@ -637,7 +640,7 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 		}
 		$senderId = $notification['senderId'];
 
-		$share = $this->federatedShareProvider->getShareById($id);
+		$share = $this->federatedGroupShareProvider->getShareById($id);
 
 		// We have to respect the default share permissions
 		$permissions = $share->getPermissions() & (int)$this->config->getAppValue('core', 'shareapi_default_permissions', (string)Constants::PERMISSION_ALL);
@@ -662,8 +665,8 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 			// the recipient of the initial share is now the initiator for the re-share
 			$share->setSharedBy($share->getSharedWith());
 			$share->setSharedWith($shareWith);
-			$result = $this->federatedShareProvider->create($share);
-			$this->federatedShareProvider->storeRemoteId((int)$result->getId(), $senderId);
+			$result = $this->federatedGroupShareProvider->create($share);
+			$this->federatedGroupShareProvider->storeRemoteId((int)$result->getId(), $senderId);
 			return ['token' => $result->getToken(), 'providerId' => $result->getId()];
 		} else {
 			throw new ProviderCouldNotAddShareException('resharing not allowed for share: ' . $id);
@@ -805,9 +808,9 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 		$result = $this->appManager->isEnabledForUser('files_sharing');
 
 		if ($incoming) {
-			$result = $result && $this->federatedShareProvider->isIncomingServer2serverShareEnabled();
+			$result = $result && $this->federatedGroupShareProvider->isIncomingServer2serverShareEnabled();
 		} else {
-			$result = $result && $this->federatedShareProvider->isOutgoingServer2serverShareEnabled();
+			$result = $result && $this->federatedGroupShareProvider->isOutgoingServer2serverShareEnabled();
 		}
 
 		return $result;
