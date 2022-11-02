@@ -234,7 +234,6 @@ class LoginController extends Controller {
 		$clientSecret = $this->providerService->getSetting($providerId, ProviderService::SETTING_CLIENT_SECRET);
 		$tokenEndpoint = $this->providerService->getSetting($providerId, ProviderService::SETTING_TOKEN_ENDPOINT);
 		$jwksEndpoint = $this->providerService->getSetting($providerId, ProviderService::SETTING_JWKS_ENDPOINT);
-		$userinfoEndpoint = $this->providerService->getSetting($providerId, ProviderService::SETTING_USERINFO_ENDPOINT);
 
 		$client = $this->clientService->newClient();
 		$result = $client->post(
@@ -293,38 +292,11 @@ class LoginController extends Controller {
 			return new JSONResponse(['Failed to load user']);
 		}
 
-		$displaynameAttribute = $this->providerService->getSetting($providerId, ProviderService::SETTING_MAPPING_DISPLAYNAME, 'preferred_displayname');
-		$groupsAttribute = $this->providerService->getSetting($providerId, ProviderService::SETTING_MAPPING_GROUPS, 'groups');
-		$regexAttribute = $this->providerService->getSetting($providerId, ProviderService::SETTING_MAPPING_REGEX_PATTERN, '.*');
-
-		$this->logger->debug('Fetching user info endpoint');
-		$options = [
-			'headers' => [
-				'Authorization' => 'Bearer ' . $data['access_token'],
-			],
-		];
-		$result = $client->get($userinfoEndpoint, $options);
-		$userinfo = json_decode($result->getBody(), true);
-
-		$displayName = $userinfo[$displaynameAttribute] ?? $userId;
-		$groups = $userinfo[$groupsAttribute] ?? array();
-
-		$this->logger->info('Userinfo: ' . json_encode($userinfo, JSON_THROW_ON_ERROR));
-
 		$this->config->setUserValue($this->userId, Application::APP_ID, $clientId . '-accessToken', $data['access_token']);
 		$this->config->setUserValue($this->userId, Application::APP_ID, $clientId . '-refreshToken', $data['refresh_token']);
-		$this->config->setUserValue($this->userId, Application::APP_ID, $clientId . '-displayName', $displayName);
-		$this->config->setUserValue($this->userId, Application::APP_ID, $clientId . '-groups', implode($groups, "\n"));
+		$this->config->setUserValue($this->userId, Application::APP_ID, $clientId . '-displayName', $userId);
 
-		foreach ($groups as $gid) {
-			$matches = [];
-			$displayName = $gid;
-			$pattern = "/" . $regexAttribute . "/";
-			if (preg_match($pattern, $gid, $matches)) {
-				$displayName = $matches[1] ?? $matches[0];
-			}
-			$this->voService->addVOUser($gid, $this->userId, $displayName, $clientId);
-		}
+		$this->voService->syncUser($this->userId, $clientId);
 
 		return new RedirectResponse(
 			$this->urlGenerator->linkToRoute('settings.PersonalSettings.index', ['section' => 'connected-accounts']) .

@@ -53,14 +53,14 @@ class Personal implements ISettings {
 			}
 
 			$displayName = $this->config->getUserValue($this->userId, Application::APP_ID, $clientId . '-displayName', '');
-			$groups = $this->config->getUserValue($this->userId, Application::APP_ID, $clientId . '-groups', '');
+			$timestamp = $this->config->getUserValue($this->userId, Application::APP_ID, $clientId . '-timestamp', '');
 
 			$providers[] = [
 				'providerId' => $i,
 				'identifier' => $providerSettings['identifier'],
 				'clientId' => $clientId,
 				'displayName' => $displayName,
-				'groups' => $groups
+				'timestamp' => $timestamp
 			];
 		}
 		$this->initialStateService->provideInitialState('user-config', $providers);

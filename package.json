@@ -1,7 +1,7 @@
 {
 	"name": "voapp",
 	"description": "Nextcloud VO Federation App for Community AAIs",
-	"version": "0.0.2",
+	"version": "0.0.4",
 	"author": "Sandro Mesterheide <sandro.mesterheide@extern.publicplan.de>",
 	"bugs": {
 		"url": "https://github.com/nextcloud/vo_federation/issues"
@@ -26,10 +26,11 @@
 	"dependencies": {
 		"@nextcloud/axios": "^1.10.0",
 		"@nextcloud/dialogs": "^3.1.2",
+		"@nextcloud/initial-state": "^1.2.0",
+		"@nextcloud/l10n": "^1.4.1",
+		"@nextcloud/moment": "^1.2.1",
 		"@nextcloud/router": "^2.0.0",
 		"@nextcloud/vue": "^5.3.1",
-		"@nextcloud/l10n": "^1.4.1",
-		"@nextcloud/initial-state": "^1.2.0",
 		"vue": "^2.7.0"
 	},
 	"browserslist": [

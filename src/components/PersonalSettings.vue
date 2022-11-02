@@ -20,14 +20,10 @@
 					<span class="icon icon-close" />
 					{{ t('vo_federation', 'Disconnect from AAI') }}
 				</button>
-				<div style="grid-column: 1/-1">
-					<label for="vo-groups">VO-Groups</label>
-					<textarea id="vo-groups"
-						v-model="provider.groups"
-						readonly
-						style="width: 100%"
-						rows="10" />
-				</div>
+				<span style="grid-column: 1/-1">
+					<b>{{ t('vo_federation', 'Last synchronization') }}:</b>
+					{{ provider.timestamp ? formatSyncTimestamp(provider.timestamp) : 'None' }}
+				</span>
 			</div>
 		</div>
 	</div>
@@ -38,6 +34,7 @@ import { loadState } from '@nextcloud/initial-state'
 import { generateUrl } from '@nextcloud/router'
 import axios from '@nextcloud/axios'
 import { showSuccess, showError } from '@nextcloud/dialogs'
+import moment from '@nextcloud/moment'
 import '@nextcloud/dialogs/styles/toast.scss'
 
 export default {
@@ -87,6 +84,9 @@ export default {
 		onOAuthClick(providerId) {
 			const url = generateUrl(`/apps/vo_federation/login/${providerId}`)
 			window.location.replace(url)
+		},
+		formatSyncTimestamp(timestamp) {
+			return moment.unix(timestamp).format('LLL')
 		},
 	},
 }

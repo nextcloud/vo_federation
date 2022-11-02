@@ -45,6 +45,7 @@ class ProviderService {
 	public const SETTING_MAPPING_GROUPS = 'mappingGroups';
 	public const SETTING_MAPPING_REGEX_PATTERN = 'mappingRegexPattern';
 	public const SETTING_TRUSTED_INSTANCES = 'trustedInstances';
+	public const SETTING_TIMESTAMP = 'timestamp';
 	public const SETTING_JWKS_CACHE = 'jwksCache';
 	public const SETTING_JWKS_CACHE_TIMESTAMP = 'jwksCacheTimestamp';
 
@@ -63,6 +64,16 @@ class ProviderService {
 			$providers[] = array_merge($providerSettings, ['providerId' => $i]);
 		}
 		return $providers;
+	}
+
+	public function getProviderWithSettingsForClientId(string $clientId): array {
+		$providers = $this->getProvidersWithSettings();
+		foreach ($providers as $provider) {
+			if ($provider[self::SETTING_CLIENT_ID] === $clientId) {
+				return $provider;
+			}
+		}
+		return [];	
 	}
 
 	public function getProviderWithSettings(int $id): array {
@@ -129,6 +140,7 @@ class ProviderService {
 			self::SETTING_MAPPING_GROUPS,
 			self::SETTING_MAPPING_REGEX_PATTERN,
 			self::SETTING_TRUSTED_INSTANCES,
+			self::SETTING_TIMESTAMP
 		];
 	}
 
