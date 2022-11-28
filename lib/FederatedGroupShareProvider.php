@@ -167,7 +167,7 @@ class FederatedGroupShareProvider implements IShareProvider {
 	 * @return string Containing only [a-zA-Z0-9]
 	 */
 	public function identifier() {
-		return 'federated_group';
+		return 'ocFederatedGroupShare';
 	}
 
 	/**

@@ -24,4 +24,9 @@ VO Federation enhances existing federation features by allowing Community AAIs t
         <personal>OCA\VO_Federation\Settings\Personal</personal>
         <personal-section>OCA\VO_Federation\Settings\PersonalSection</personal-section>
     </settings>
+	<collaboration>
+		<plugins>
+			<plugin type="collaborator-search" share-type="SHARE_TYPE_FEDERATED_GROUP">OCA\VO_Federation\Collaboration\FederatedGroupPlugin</plugin>
+		</plugins>
+	</collaboration>    
 </info>
