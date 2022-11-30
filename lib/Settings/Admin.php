@@ -29,7 +29,7 @@ use OCA\VO_Federation\AppInfo\Application;
 use OCA\VO_Federation\Service\ProviderService;
 
 use OCP\AppFramework\Http\TemplateResponse;
-use OCP\IInitialStateService;
+use OCP\AppFramework\Services\IInitialState;
 use OCP\IURLGenerator;
 use OCP\Settings\ISettings;
 use OCP\Util;
@@ -47,7 +47,7 @@ class Admin implements ISettings {
 
 	public function __construct(ProviderService $providerService,
 								IURLGenerator $urlGenerator,
-								IInitialStateService $initialStateService) {
+								IInitialState $initialStateService) {
 		$this->providerService = $providerService;
 		$this->urlGenerator = $urlGenerator;
 		$this->initialStateService = $initialStateService;

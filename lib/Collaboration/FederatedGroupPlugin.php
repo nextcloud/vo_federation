@@ -36,7 +36,8 @@ use OCP\IGroup;
 use OCP\IGroupManager;
 use OCP\IUserSession;
 use OCP\Share\IShare;
-use OCP\Group\Backend\IFederationGroupBackend;
+use OCA\VO_Federation\Backend\GroupBackend;
+use OCA\VO_Federation\Service\ProviderService;
 use OCP\Group\Backend\IGroupDetailsBackend;
 
 class FederatedGroupPlugin implements ISearchPlugin {
@@ -55,11 +56,17 @@ class FederatedGroupPlugin implements ISearchPlugin {
 	private $config;
 	/** @var IUserSession */
 	private $userSession;
+	/** @var GroupBackend */
+	private $voGroupBackend;
+	/** @var ProviderService */
+	private $providerService;
 
-	public function __construct(IConfig $config, IGroupManager $groupManager, IUserSession $userSession) {
+	public function __construct(IConfig $config, IGroupManager $groupManager, IUserSession $userSession, GroupBackend $voGroupBackend, ProviderService $providerService) {
 		$this->groupManager = $groupManager;
 		$this->config = $config;
 		$this->userSession = $userSession;
+		$this->voGroupBackend = $voGroupBackend;
+		$this->providerService = $providerService;
 
 		$this->shareeEnumeration = $this->config->getAppValue('core', 'shareapi_allow_share_dialog_user_enumeration', 'yes') === 'yes';
 		$this->shareWithGroupOnly = $this->config->getAppValue('core', 'shareapi_only_share_with_group_members', 'no') === 'yes';
@@ -95,12 +102,9 @@ class FederatedGroupPlugin implements ISearchPlugin {
 			$groupIds = array_intersect($groupIds, $userGroups);
 		}
 		
-		$federatedGroups = array_filter($groups, function(IGroup $group) {
-			$federationGroupBackend = $this->getFederationGroupBackend();			
-			if (!is_null($federationGroupBackend)) {
-				return $federationGroupBackend->groupExists($group->getGID());
-			}
-			return false;
+		$voGroupBackend = $this->voGroupBackend;
+		$federatedGroups = array_filter($groups, function(IGroup $group) use ($voGroupBackend) {
+			return $voGroupBackend->groupExists($group->getGID());
 		});
 		$federatedGroups = array_map(function (IGroup $group) {
 			return $group->getGID();
@@ -125,7 +129,7 @@ class FederatedGroupPlugin implements ISearchPlugin {
 						'shareType' => IShare::TYPE_FEDERATED_GROUP,
 						'shareWith' => $gid
 					],
-					'shareWithDescription' => $this->getShareWithDescription($group)
+					'shareWithDescription' => $this->getShareWithDescription($gid)
 				];
 			} else {
 				if ($this->shareeEnumerationInGroupOnly && !in_array($group->getGID(), $userGroups, true)) {
@@ -137,7 +141,7 @@ class FederatedGroupPlugin implements ISearchPlugin {
 						'shareType' => IShare::TYPE_FEDERATED_GROUP,
 						'shareWith' => $gid						
 					],
-					'shareWithDescription' => $this->getShareWithDescription($group)
+					'shareWithDescription' => $this->getShareWithDescription($gid)
 				];
 			}
 		}
@@ -153,7 +157,7 @@ class FederatedGroupPlugin implements ISearchPlugin {
 						'shareType' => IShare::TYPE_FEDERATED_GROUP,
 						'shareWith' => $group->getGID()
 					],
-					'shareWithDescription' => $this->getShareWithDescription($group)					
+					'shareWithDescription' => $this->getShareWithDescription($group->getGID())					
 				];
 			}
 		}
@@ -168,40 +172,10 @@ class FederatedGroupPlugin implements ISearchPlugin {
 		return $hasMoreResults;
 	}
 
-	/**
-	 * Return first group backend implementing IFederationGroupBackend
-	 */
-	private function getFederationGroupBackend() {
-		$backends = $this->groupManager->getBackends();
-		foreach ($backends as $backend) {
-			if ($backend instanceof IFederationGroupBackend) {
-				return $backend;
-			}
-		}
-		return null;		
+	private function getShareWithDescription($gid) : string {
+		$providerId = $this->voGroupBackend->getProviderId($gid);
+		$provider = $this->providerService->getProvider($providerId);
+		return $provider->getIdentifier();
 	}
 
-	private function getGroupDetailsBackend() {
-		$federationGroupBackend = $this->getFederationGroupBackend();
-		if ($federationGroupBackend instanceof IGroupDetailsBackend) {
-			return $federationGroupBackend;
-		}
-
-		$backends = $this->groupManager->getBackends();
-		foreach ($backends as $backend) {
-			if ($backend instanceof IGroupDetailsBackend) {
-				return $backend;
-			}
-		}
-		return null;		
-	}
-
-	private function getShareWithDescription(IGroup $group) {
-		$groupDetailsBackend = $this->getGroupDetailsBackend();
-		if (!is_null($groupDetailsBackend)) {
-			$groupDetails = $groupDetailsBackend->getGroupDetails($group->getGID());
-			return $groupDetails['shareWithDescription'];
-		}
-		return null;
-	}
 }

@@ -28,7 +28,7 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use OCA\VO_Federation\Service\ProviderService;
 use OCP\Group\Backend\ABackend;
 use OCP\Group\Backend\IGetDisplayNameBackend;
-use OCP\Group\Backend\IGroupDetailsBackend;
+use OCP\Group\Backend\ISetDisplayNameBackend;
 use OCP\Group\Backend\IDeleteGroupBackend;
 use OCP\Group\Backend\IAddToGroupBackend;
 use OCP\Group\Backend\IRemoveFromGroupBackend;
@@ -42,7 +42,7 @@ use OCP\ILogger;
  */
 class GroupBackend extends ABackend implements
 	IGetDisplayNameBackend,
-	IGroupDetailsBackend,
+	ISetDisplayNameBackend,
 	IDeleteGroupBackend,
 	IAddToGroupBackend,
 	IRemoveFromGroupBackend,
@@ -108,20 +108,6 @@ class GroupBackend extends ABackend implements
 		];
 
 		return $result === 1;
-	}
-
-	public function createVOGroup(string $gid, string $displayName, string $aai): bool {
-		$result = $this->createGroup($gid, $displayName);
-
-		$qb = $this->dbConn->getQueryBuilder();
-		$qb->update('vo_groups')
-			->set('aai', $qb->createNamedParameter($aai))
-			->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
-			->executeStatement();
-
-		$this->groupCache[$gid]['aai'] = $aai;
-
-		return $result;
 	}
 
 	/**
@@ -239,7 +225,7 @@ class GroupBackend extends ABackend implements
 
 		// No magic!
 		$qb = $this->dbConn->getQueryBuilder();
-		$cursor = $qb->select('gu.gid', 'g.displayname', 'g.aai')
+		$cursor = $qb->select('gu.gid', 'g.displayname', 'g.provider_id')
 			->from('vo_group_user', 'gu')
 			->leftJoin('gu', 'vo_groups', 'g', $qb->expr()->eq('gu.gid', 'g.gid'))
 			->where($qb->expr()->eq('uid', $qb->createNamedParameter($uid)))
@@ -251,7 +237,7 @@ class GroupBackend extends ABackend implements
 			$this->groupCache[$row['gid']] = [
 				'gid' => $row['gid'],
 				'displayname' => $row['displayname'],
-				'aai' => $row['aai'],
+				'providerId' => $row['provider_id'],
 			];
 		}
 		$cursor->closeCursor();
@@ -312,7 +298,7 @@ class GroupBackend extends ABackend implements
 		}
 
 		$qb = $this->dbConn->getQueryBuilder();
-		$cursor = $qb->select('gid', 'displayname', 'aai')
+		$cursor = $qb->select('gid', 'displayname', 'provider_id')
 			->from('vo_groups')
 			->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
 			->execute();
@@ -323,7 +309,7 @@ class GroupBackend extends ABackend implements
 			$this->groupCache[$gid] = [
 				'gid' => $gid,
 				'displayname' => $result['displayname'],
-				'aai' => $result['aai'],
+				'providerId' => $result['provider_id'],
 			];
 			return true;
 		}
@@ -406,42 +392,55 @@ class GroupBackend extends ABackend implements
 		return (string) $displayName;
 	}
 
-	public function getAAI(string $gid): string {
-		if (isset($this->groupCache[$gid])) {
-			$aai = $this->groupCache[$gid]['aai'];
+	public function setDisplayName(string $gid, string $displayName): bool {
+		$this->fixDI();
 
-			if (isset($aai) && trim($aai) !== '') {
-				return $aai;
+		$qb = $this->dbConn->getQueryBuilder();		
+		$result = $qb->update('vo_groups')
+			->set('displayname', $qb->createNamedParameter($displayName))
+			->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
+			->executeStatement();
+
+		$this->groupCache[$gid]['displayname'] = $displayName;
+
+		return $result === 1;		
+	}	
+
+	public function getProviderId(string $gid): int {
+		if (isset($this->groupCache[$gid])) {
+			$providerId = $this->groupCache[$gid]['providerId'];
+
+			if (isset($providerId)) {
+				return $providerId;
 			}
 		}
 
 		$this->fixDI();
 
 		$query = $this->dbConn->getQueryBuilder();
-		$query->select('aai')
+		$query->select('provider_id')
 			->from('vo_groups')
 			->where($query->expr()->eq('gid', $query->createNamedParameter($gid)));
 
 		$result = $query->execute();
-		$aai = $result->fetchOne();
+		$providerId = $result->fetchOne();
 		$result->closeCursor();
 
-		return (string) $aai;
+		return (int) $providerId;
 	}
 
-	public function getGroupDetails(string $gid): array {
-		$details = [];
+	public function setProviderId(string $gid, int $providerId) : bool {
+		$this->fixDI();
 
-		$displayName = $this->getDisplayName($gid);
-		$aai = $this->getAAI($gid);
-		if ($displayName !== '') {
-			$details['displayName'] = $displayName;
-		}
-		if ($aai !== '') {
-			$details['shareWithDescription'] = $this->providerService->getSettingClientNameForClientId($aai);
-		}
+		$qb = $this->dbConn->getQueryBuilder();		
+		$result = $qb->update('vo_groups')
+			->set('provider_id', $qb->createNamedParameter($providerId))
+			->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
+			->executeStatement();
 
-		return $details;
+		$this->groupCache[$gid]['providerId'] = $providerId;		
+
+		return $result === 1;
 	}
 
 	public function getBackendName(): string {

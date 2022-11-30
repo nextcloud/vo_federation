@@ -30,13 +30,15 @@ namespace OCA\VO_Federation\Controller;
 use OCA\VO_Federation\Vendor\Firebase\JWT\JWT;
 use OCA\VO_Federation\Vendor\Firebase\JWT\JWK;
 use OCA\VO_Federation\AppInfo\Application;
+use OCA\VO_Federation\Db\SessionMapper;
 use OCA\VO_Federation\Service\ProviderService;
-use OCA\VO_Federation\Service\VirtualOrganisationService;
+use OCA\VO_Federation\Service\GroupsService;
 
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\RedirectResponse;
+use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Http\Client\IClientService;
 use OCP\IConfig;
@@ -44,14 +46,13 @@ use OCP\ILogger;
 use OCP\IRequest;
 use OCP\ISession;
 use OCP\IURLGenerator;
-use OCP\IUserManager;
 use OCP\IUserSession;
 use OCP\Security\ISecureRandom;
 
 class LoginController extends Controller {
-	private const STATE = 'oidc.state';
-	private const NONCE = 'oidc.nonce';
-	public const PROVIDERID = 'oidc.providerid';
+	private const STATE = 'vo_federation.oidc.state';
+	private const NONCE = 'vo_federation.oidc.nonce';
+	public const PROVIDERID = 'vo_federation.oidc.providerid';
 
 	/** @var ISecureRandom */
 	private $random;
@@ -65,32 +66,25 @@ class LoginController extends Controller {
 	/** @var IURLGenerator */
 	private $urlGenerator;
 
-	/** @var IUserSession */
-	private $userSession;
-
-	/** @var IUserManager */
-	private $userManager;
-
 	/** @var ITimeFactory */
 	private $timeFactory;
 
 	/** @var ProviderService */
 	private $providerService;
 
-	/** @var ProviderService */
-	private $voService;
+	/** @var GroupsService */
+	private $groupsService;
+
+	/** @var SessionMapper */
+	private $sessionMapper;
 
 	/** @var ILogger */
 	private $logger;
 
-	/**
-	 * @var IConfig
-	 */
+	/** @var IConfig */
 	private $config;
 
-	/**
-	 * @var string|null
-	 */
+	/** @var string|null */
 	private $userId;
 
 	public function __construct(
@@ -99,12 +93,11 @@ class LoginController extends Controller {
 		ISession $session,
 		IClientService $clientService,
 		IURLGenerator $urlGenerator,
-		IUserSession $userSession,
-		IUserManager $userManager,
 		ITimeFactory $timeFactory,
 		IConfig $config,
 		ProviderService $providerService,
-		VirtualOrganisationService $voService,
+		GroupsService $groupsService,
+		SessionMapper $sessionMapper,
 		ILogger $logger,
 		?string $userId
 	) {
@@ -114,23 +107,55 @@ class LoginController extends Controller {
 		$this->session = $session;
 		$this->clientService = $clientService;
 		$this->urlGenerator = $urlGenerator;
-		$this->userSession = $userSession;
-		$this->userManager = $userManager;
 		$this->timeFactory = $timeFactory;
 		$this->providerService = $providerService;
-		$this->voService = $voService;
+		$this->groupsService = $groupsService;
+		$this->sessionMapper = $sessionMapper;
 		$this->logger = $logger;
 		$this->config = $config;
 		$this->userId = $userId;
 	}
 
 	/**
+	 * @return bool
+	 */
+	private function isSecure(): bool {
+		// no restriction in debug mode
+		return $this->config->getSystemValueBool('debug', false) || $this->request->getServerProtocol() === 'https';
+	}
+
+	/**
+	 * @return TemplateResponse
+	 */
+	private function generateProtocolErrorResponse(): TemplateResponse {
+		$response = new TemplateResponse('', 'error', [
+			'errors' => [
+				['error' => 'You must access Nextcloud with HTTPS to use OpenID Connect.']
+			]
+		], TemplateResponse::RENDER_AS_ERROR);
+		$response->setStatus(Http::STATUS_NOT_FOUND);
+		return $response;
+	}	
+
+	/**
 	 * @PublicPage
 	 * @NoCSRFRequired
 	 * @UseSession
+	 *
+	 * @param int $providerId
+	 * @param string|null $redirectUrl
+	 * @return DataDisplayResponse|RedirectResponse|TemplateResponse
+	 * @throws DoesNotExistException
+	 * @throws MultipleObjectsReturnedException
 	 */
-	public function login(int $providerId = 0) {
+	public function login(int $providerId) {
+		if (!$this->isSecure()) {
+			return $this->generateProtocolErrorResponse();
+		}		
 		$this->logger->debug('Initiating login for provider with id: ' . $providerId);
+
+		//TODO: handle exceptions
+		$provider = $this->providerMapper->getProvider($providerId);
 
 		$state = $this->random->generate(32, ISecureRandom::CHAR_DIGITS . ISecureRandom::CHAR_UPPER);
 		$this->session->set(self::STATE, $state);
@@ -140,17 +165,17 @@ class LoginController extends Controller {
 
 		$this->session->set(self::PROVIDERID, $providerId);
 		$this->session->close();
-
+		
 		// get attribute mapping settings
-		$clientId = $this->providerService->getSetting($providerId, ProviderService::SETTING_CLIENT_ID);
-		$authorizationEndpoint = $this->providerService->getSetting($providerId, ProviderService::SETTING_AUTHORIZATION_ENDPOINT);
+		$clientId = $provider->getClientId();
+		$scope = $provider->getScope() ?? 'openid profile';
+		$uidAttribute = $provider->getUidClaim() ?? 'sub';
+		$displaynameAttribute = $provider->getDisplayNameClaim() ?? 'name';
 
-		$scope = $this->providerService->getSetting($providerId, ProviderService::SETTING_SCOPE, 'openid profile');
-		$extraClaims = $this->providerService->getSetting($providerId, ProviderService::SETTING_EXTRA_CLAIMS);
+		$groupsAttribute = $provider->getGroupsClaim() ?? 'groups';
 
-		$uidAttribute = $this->providerService->getSetting($providerId, ProviderService::SETTING_MAPPING_UID, 'sub');
-		$displaynameAttribute = $this->providerService->getSetting($providerId, ProviderService::SETTING_MAPPING_DISPLAYNAME, 'preferred_displayname');
-		$groupsAttribute = $this->providerService->getSetting($providerId, ProviderService::SETTING_MAPPING_GROUPS, 'groups');
+		$providerSettings = $provider->getSettings() ?? [];
+		$authorizationEndpoint = $providerSettings[ProviderService::SETTING_AUTHORIZATION_ENDPOINT];
 
 		$claims = [
 			// more details about requesting claims:
@@ -172,7 +197,7 @@ class LoginController extends Controller {
 			$claims['userinfo'][$uidAttribute] = ['essential' => true];
 		}
 
-		$extraClaimsString = '';
+		$extraClaimsString = $providerSettings[ProviderService::SETTING_EXTRA_CLAIMS];
 		if ($extraClaimsString) {
 			$extraClaims = explode(' ', $extraClaimsString);
 			foreach ($extraClaims as $extraClaim) {
@@ -191,24 +216,39 @@ class LoginController extends Controller {
 			'nonce' => $nonce
 		];
 
-		$url = $authorizationEndpoint . '?' . http_build_query($data);
-		$this->logger->debug('Redirecting user to: ' . $url);
+		$authorizationUrl = $this->buildAuthorizationUrl($authorizationEndpoint, $data);
+
+		$this->logger->debug('Redirecting user to: ' . $authorizationUrl);
 
 		// Workaround to avoid empty session on special conditions in Safari
 		// https://github.com/nextcloud/user_oidc/pull/358
 		if ($this->request->isUserAgent(['/Safari/']) && !$this->request->isUserAgent(['/Chrome/'])) {
-			return new Http\DataDisplayResponse('<meta http-equiv="refresh" content="0; url=' . $url . '" />');
+			return new Http\DataDisplayResponse('<meta http-equiv="refresh" content="0; url=' . $authorizationUrl . '" />');
 		}
 
-		return new RedirectResponse($url);
+		return new RedirectResponse($authorizationUrl);
 	}
 
 	/**
 	 * @PublicPage
 	 * @NoCSRFRequired
 	 * @UseSession
+	 *
+	 * @param string $state
+	 * @param string $code
+	 * @param string $scope
+	 * @param string $error
+	 * @param string $error_description
+	 * @return JSONResponse|RedirectResponse|TemplateResponse
+	 * @throws DoesNotExistException
+	 * @throws MultipleObjectsReturnedException
+	 * @throws SessionNotAvailableException
+	 * @throws \JsonException
 	 */
-	public function code($state = '', $code = '', $scope = '', $error = '', $error_description = '') {
+	public function code(string $state = '', string $code = '', string $scope = '', string $error = '', string $error_description = '') {
+		if (!$this->isSecure()) {
+			return $this->generateProtocolErrorResponse();
+		}
 		$this->logger->debug('Code login with core: ' . $code . ' and state: ' . $state);
 
 		if ($error !== '') {
@@ -229,11 +269,16 @@ class LoginController extends Controller {
 		}
 
 		$providerId = (int)$this->session->get(self::PROVIDERID);
+		$provider = $this->providerMapper->getProvider($providerId);
 
-		$clientId = $this->providerService->getSetting($providerId, ProviderService::SETTING_CLIENT_ID);
-		$clientSecret = $this->providerService->getSetting($providerId, ProviderService::SETTING_CLIENT_SECRET);
-		$tokenEndpoint = $this->providerService->getSetting($providerId, ProviderService::SETTING_TOKEN_ENDPOINT);
-		$jwksEndpoint = $this->providerService->getSetting($providerId, ProviderService::SETTING_JWKS_ENDPOINT);
+		$clientId = $provider->getClientId();
+		$clientSecret = $provider->getClientSecret();
+
+		$providerSettings = $provider->getSettings() ?? [];
+		$tokenEndpoint = $providerSettings[ProviderService::SETTING_TOKEN_ENDPOINT];
+		$jwksEndpoint = $providerSettings[ProviderService::SETTING_JWKS_ENDPOINT];
+
+		$this->logger->debug('Obtainting data from: ' . $tokenEndpoint);
 
 		$client = $this->clientService->newClient();
 		$result = $client->post(
@@ -252,6 +297,11 @@ class LoginController extends Controller {
 		$data = json_decode($result->getBody(), true);
 		$this->logger->debug('Received code response: ' . json_encode($data, JSON_THROW_ON_ERROR));
 
+		// TODO: proper error handling
+		$idTokenRaw = $data['id_token'];
+		$accessToken = $data['access_token'];
+		$refreshToken = $data['refresh_token'];
+
 		$responseBody = $client->get($jwksEndpoint)->getBody();
 		$result = json_decode($responseBody, true);
 		$jwks = JWK::parseKeySet($result);
@@ -262,9 +312,9 @@ class LoginController extends Controller {
 		}
 
 		JWT::$leeway = 60;
-		$idTokenPayload = JWT::decode($data['id_token'], $jwks, array_keys(JWT::$supported_algs));
+		$idTokenPayload = JWT::decode($idTokenRaw, $jwks, array_keys(JWT::$supported_algs));
 
-		$this->logger->info('Parsed the JWT payload: ' . json_encode($idTokenPayload, JSON_THROW_ON_ERROR));
+		$this->logger->debug('Parsed the JWT payload: ' . json_encode($idTokenPayload, JSON_THROW_ON_ERROR));
 
 		if ($idTokenPayload->exp < $this->timeFactory->getTime()) {
 			$this->logger->debug('Token expired');
@@ -286,17 +336,17 @@ class LoginController extends Controller {
 		}
 
 		// get user ID attribute
-		$uidAttribute = $this->providerService->getSetting($providerId, ProviderService::SETTING_MAPPING_UID, 'sub');
+		$uidAttribute = $provider->getUidClaim() ?? 'sub';
 		$userId = $idTokenPayload->{$uidAttribute} ?? null;
 		if ($userId === null) {
 			return new JSONResponse(['Failed to load user']);
 		}
 
-		$this->config->setUserValue($this->userId, Application::APP_ID, $clientId . '-accessToken', $data['access_token']);
-		$this->config->setUserValue($this->userId, Application::APP_ID, $clientId . '-refreshToken', $data['refresh_token']);
-		$this->config->setUserValue($this->userId, Application::APP_ID, $clientId . '-displayName', $userId);
+		$displaynameAttribute = $provider->getDisplaynameAttribute() ?? 'name';
+		$displayname = $idTokenPayload->{$displaynameAttribute} ?? $userId;
 
-		$this->voService->syncUser($this->userId, $clientId);
+		$this->sessionMapper->createOrUpdateSession($this->userId, $providerId, $idTokenRaw, $userId, $idTokenPayload->exp, $accessToken, 0, $refreshToken, 0, $displayname);
+		$this->groupsService->syncUser($this->userId, $providerId);
 
 		return new RedirectResponse(
 			$this->urlGenerator->linkToRoute('settings.PersonalSettings.index', ['section' => 'connected-accounts']) .
@@ -305,27 +355,28 @@ class LoginController extends Controller {
 	}
 
 	/**
-	 * @NoAdminRequired
-	 * @NoCSRFRequired
-	 * @UseSession
-	 *
-	 * @return Http\RedirectResponse
-	 * @throws Error
-	 */
-	public function singleLogoutService() {
-		$oidcSystemConfig = $this->config->getSystemValue('user_oidc', []);
-		$targetUrl = $this->urlGenerator->getAbsoluteURL('/');
-		if (!isset($oidcSystemConfig['single_logout']) || $oidcSystemConfig['single_logout']) {
-			$providerId = (int)$this->session->get(self::PROVIDERID);
-			$provider = $this->providerMapper->getProvider($providerId);
-			$targetUrl = $this->discoveryService->obtainDiscovery($provider)['end_session_endpoint'] ?? $this->urlGenerator->getAbsoluteURL('/');
-			if ($targetUrl) {
-				$targetUrl .= '?post_logout_redirect_uri=' . $this->urlGenerator->getAbsoluteURL('/');
-			}
-		}
-		$this->userSession->logout();
-		// make sure we clear the session to avoid messing with Backend::isSessionActive
-		$this->session->clear();
-		return new RedirectResponse($targetUrl);
-	}
+	* @param string $authorizationEndpoint
+	* @param array $extraGetParameters
+	* @return string
+	*/
+   public function buildAuthorizationUrl(string $authorizationEndpoint, array $extraGetParameters = []): string {
+	   $parsedUrl = parse_url($authorizationEndpoint);
+
+	   $urlWithoutParams =
+		   (isset($parsedUrl['scheme']) ? $parsedUrl['scheme'] . '://' : '')
+		   . ($parsedUrl['host'] ?? '')
+		   . (isset($parsedUrl['port']) ? ':' . $parsedUrl['port'] : '')
+		   . ($parsedUrl['path'] ?? '');
+
+	   $queryParams = $extraGetParameters;
+	   if (isset($parsedUrl['query'])) {
+		   parse_str($parsedUrl['query'], $parsedQueryParams);
+		   $queryParams = array_merge($queryParams, $parsedQueryParams);
+	   }
+
+	   // sanitize everything before the query parameters
+	   // and trust http_build_query to sanitize the query parameters
+	   return htmlentities(filter_var($urlWithoutParams, FILTER_SANITIZE_URL), ENT_QUOTES)
+		   . (empty($queryParams) ? '' : '?' . http_build_query($queryParams));
+   }
 }

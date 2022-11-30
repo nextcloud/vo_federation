@@ -27,183 +27,133 @@ declare(strict_types=1);
 namespace OCA\VO_Federation\Service;
 
 use OCA\VO_Federation\AppInfo\Application;
+use OCA\VO_Federation\Db\Provider;
+use OCA\VO_Federation\Db\ProviderMapper;
+use OCA\VO_Federation\Db\Session;
+use OCA\VO_Federation\Db\SessionMapper;
+use OCA\VO_Federation\Db\TrustedInstance;
+use OCA\VO_Federation\Db\TrustedInstanceMapper;
+use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IConfig;
 
 class ProviderService {
-	public const SETTING_CLIENT_NAME = 'identifier';
-	public const SETTING_CLIENT_ID = 'clientId';
-	public const SETTING_CLIENT_SECRET = 'clientSecret';
 	public const SETTING_AUTHORIZATION_ENDPOINT = 'authorizationEndpoint';
 	public const SETTING_TOKEN_ENDPOINT = 'tokenEndpoint';
 	public const SETTING_JWKS_ENDPOINT = 'jwksEndpoint';
 	public const SETTING_USERINFO_ENDPOINT = 'userinfoEndpoint';
-	public const SETTING_SCOPE = 'scope';
 	public const SETTING_EXTRA_CLAIMS = 'extraClaims';
-	public const SETTING_MAPPING_UID = 'mappingUid';
-	public const SETTING_MAPPING_UID_DEFAULT = 'sub';
-	public const SETTING_MAPPING_DISPLAYNAME = 'mappingDisplayName';
-	public const SETTING_MAPPING_GROUPS = 'mappingGroups';
-	public const SETTING_MAPPING_REGEX_PATTERN = 'mappingRegexPattern';
-	public const SETTING_TRUSTED_INSTANCES = 'trustedInstances';
-	public const SETTING_TIMESTAMP = 'timestamp';
 	public const SETTING_JWKS_CACHE = 'jwksCache';
 	public const SETTING_JWKS_CACHE_TIMESTAMP = 'jwksCacheTimestamp';
 
 	/** @var IConfig */
 	private $config;
+	/** @var ProviderMapper */
+	private $providerMapper;
+	/** @var SessionMapper */
+	private $sessionMapper;
+	/** @var TrustedInstanceMapper */
+	private $trustedInstanceMapper;
 
-	public function __construct(IConfig $config) {
+	/** @var GroupsService */
+	private $groupsService;
+
+	public function __construct(IConfig $config, ProviderMapper $providerMapper, SessionMapper $sessionMapper, TrustedInstanceMapper $trustedInstanceMapper, GroupsService $groupsService) {
 		$this->config = $config;
+		$this->providerMapper = $providerMapper;
+		$this->sessionMapper = $sessionMapper;
+		$this->trustedInstanceMapper = $trustedInstanceMapper;
+		$this->groupsService = $groupsService;
 	}
+
 
 	public function getProvidersWithSettings(): array {
-		$providerIdLatest = (int) $this->config->getAppValue(Application::APP_ID, 'providerIdLatest', -1);
-		$providers = [];
-		for ($i = 0; $i <= $providerIdLatest;$i++) {
-			$providerSettings = $this->getProviderWithSettings($i);
-			$providers[] = array_merge($providerSettings, ['providerId' => $i]);
-		}
-		return $providers;
+		$trustedInstanceMapper = $this->trustedInstanceMapper;
+		$providers = $this->providerMapper->getProviders();
+		return array_map(function($provider) use ($trustedInstanceMapper) {
+			$trustedInstances = $trustedInstanceMapper->findAll($provider->getId());
+			$provider = $provider->jsonSerialize();
+			$provider['trustedInstances'] = array_map(function($trustedInstance) {
+				return $trustedInstance->getInstanceUrl();
+			}, $trustedInstances);
+			return $provider;
+		}, $providers);
 	}
 
-	public function getProviderWithSettingsForClientId(string $clientId): array {
-		$providers = $this->getProvidersWithSettings();
-		foreach ($providers as $provider) {
-			if ($provider[self::SETTING_CLIENT_ID] === $clientId) {
-				return $provider;
+	public function getProvider(int $providerId): Provider {
+		return $this->providerMapper->getProvider($providerId);
+	}	
+
+	public function getProviderByIdentifier(string $identifier): ?Provider {
+		try {
+			return $this->providerMapper->findProviderByIdentifier($identifier);
+		} catch (DoesNotExistException $e) {
+			return null;
+		}
+	}
+
+	public function getProviderTrustedInstances($providerId) {
+		return $this->trustedInstanceMapper->findAll($providerId);
+	}
+
+	public function getProviderSession(string $uid, int $providerId) : Session {
+		$deletedSession = $this->sessionMapper->findSessionByProviderId($uid, $providerId);
+
+		return $deletedSession;
+	}
+
+	public function deleteProvider(int $providerId) : Provider {
+		$provider = $this->getProvider($providerId);
+		$this->providerMapper->delete($provider);
+		$this->trustedInstanceMapper->deleteAll($providerId);
+		$this->sessionMapper->deleteAllSessions($providerId);
+
+		$this->groupsService->removeAllProviderMemberships($provider);
+
+		return $provider;
+	}
+
+	public function deleteProviderSession(string $uid, int $providerId) : Session {
+		$deletedSession = $this->sessionMapper->deleteSession($uid, $providerId);
+
+		$this->groupsService->removeAllSessionMemberships($deletedSession);
+
+		return $deletedSession;
+	}
+
+	public function createOrUpdateTrustedInstances(int $providerId, array $newTrustedInstances): bool {
+		$currentTrustedInstanceEntities = $this->trustedInstanceMapper->findAll($providerId);
+		$existingNewTrustedInstances = [];
+		$insertedOrDeleted = 0;
+		foreach ($currentTrustedInstanceEntities as $current) {
+			$instanceUrl = $current->getInstanceUrl();
+			if (in_array($instanceUrl, $newTrustedInstances)) {
+				$existingNewTrustedInstances[] = $instanceUrl;
+			} else {
+				$this->trustedInstanceMapper->delete($current);
+				$insertedOrDeleted++;
 			}
 		}
-		return [];	
-	}
-
-	public function getProviderWithSettings(int $id): array {
-		$providerSettings = $this->getSettings($id);
-		return $providerSettings;
-	}
-
-	public function getSettings(int $providerId): array {
-		$result = [];
-		foreach ($this->getSupportedSettings() as $setting) {
-			$value = $this->getSetting($providerId, $setting);
-			$result[$setting] = $this->convertToJSON($setting, $value);
-		}
-		return $result;
-	}
-
-	public function setSettings(int $providerId, array $settings): array {
-		$storedSettings = $this->getSettings($providerId);
-		foreach ($settings as $setting => $value) {
-			if (!in_array($setting, $this->getSupportedSettings(), true)) {
+		foreach($newTrustedInstances as $instanceUrl) {
+			if (in_array($instanceUrl, $existingNewTrustedInstances)) {
 				continue;
 			}
-			$this->setSetting($providerId, $setting, $this->convertFromJSON($setting, $value));
-			$storedSettings[$setting] = $value;
+			$trustedInstance = new TrustedInstance();
+			$trustedInstance->setProviderId($providerId);
+			$trustedInstance->setInstanceUrl($instanceUrl);
+			$this->trustedInstanceMapper->insert($trustedInstance);
+			$insertedOrDeleted++;
 		}
-		return $storedSettings;
-	}
-
-	public function deleteSettings(int $providerId): void {
-		foreach ($this->getSupportedSettings() as $setting) {
-			$this->config->deleteAppValue(Application::APP_ID, $this->getSettingsKey($providerId, $setting));
-		}
-	}
-
-	public function setSetting(int $providerId, string $key, string $value): void {
-		$this->config->setAppValue(Application::APP_ID, $this->getSettingsKey($providerId, $key), $value);
-	}
-
-	public function getSetting(int $providerId, string $key, string $default = ''): string {
-		$value = $this->config->getAppValue(Application::APP_ID, $this->getSettingsKey($providerId, $key), '');
-		if ($value === '') {
-			return $default;
-		}
-		return $value;
-	}
-
-	private function getSettingsKey(int $providerId, string $key): string {
-		return 'provider-' . $providerId . '-' . $key;
+		return $insertedOrDeleted !== 0;
 	}
 
 	private function getSupportedSettings(): array {
 		return [
-			self::SETTING_CLIENT_NAME,
-			self::SETTING_CLIENT_ID,
-			self::SETTING_CLIENT_SECRET,
 			self::SETTING_AUTHORIZATION_ENDPOINT,
 			self::SETTING_TOKEN_ENDPOINT,
 			self::SETTING_JWKS_ENDPOINT,
 			self::SETTING_USERINFO_ENDPOINT,
-			self::SETTING_SCOPE,
 			self::SETTING_EXTRA_CLAIMS,
-			self::SETTING_MAPPING_UID,
-			self::SETTING_MAPPING_DISPLAYNAME,
-			self::SETTING_MAPPING_GROUPS,
-			self::SETTING_MAPPING_REGEX_PATTERN,
-			self::SETTING_TRUSTED_INSTANCES,
-			self::SETTING_TIMESTAMP
 		];
 	}
 
-	private function convertFromJSON(string $key, $value): string {
-		if ($key === self::SETTING_TRUSTED_INSTANCES) {
-			$value = json_encode($value);
-		}
-		//if ($key === self::SETTING_UNIQUE_UID || $key === self::SETTING_CHECK_BEARER) {
-		//	$value = $value ? '1' : '0';
-		//}
-		return (string)$value;
-	}
-
-	private function convertToJSON(string $key, $value) {
-		// default is disabled (if not set)
-		//if ($key === self::SETTING_UNIQUE_UID || $key === self::SETTING_CHECK_BEARER) {
-		//	return $value === '1';
-		//}
-		if ($key === self::SETTING_TRUSTED_INSTANCES) {
-			return json_decode($value);
-		}
-		return (string)$value;
-	}
-
-	private $settingsCache = [];
-
-	public function getSettingClientNameForClientId($clientId) {
-		if (isset($this->settingsCache[$clientId])) {
-			$displayName = $this->settingsCache[$clientId][self::SETTING_CLIENT_NAME];
-
-			if (isset($displayName) && trim($displayName) !== '') {
-				return $displayName;
-			}
-		}
-
-		$providers = $this->getProvidersWithSettings();
-		foreach ($providers as $provider) {
-			if ($provider[self::SETTING_CLIENT_ID] === $clientId) {
-				$displayName = $provider[self::SETTING_CLIENT_NAME];
-				$this->settingsCache[$clientId][self::SETTING_CLIENT_NAME] = $displayName;
-				return $displayName;
-			}
-		}
-		return '';
-	}
-
-	public function getSettingTrustedInstancesForClientId($clientId) {
-		if (isset($this->settingsCache[$clientId])) {
-			$trustedInstances = $this->settingsCache[$clientId][self::SETTING_TRUSTED_INSTANCES];
-
-			if (is_array($trustedInstances)) {
-				return $trustedInstances;
-			}
-		}
-
-		$providers = $this->getProvidersWithSettings();
-		foreach ($providers as $provider) {
-			if ($provider[self::SETTING_CLIENT_ID] === $clientId) {
-				$trustedInstances = $provider[self::SETTING_TRUSTED_INSTANCES];
-				$this->settingsCache[$clientId][self::SETTING_TRUSTED_INSTANCES] = $trustedInstances;
-				return $trustedInstances;
-			}
-		}
-		return [];
-	}
 }

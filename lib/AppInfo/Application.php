@@ -14,12 +14,14 @@ use OC\EventDispatcher\EventDispatcher;
 use OCA\VO_Federation\Backend\GroupBackend;
 use OCA\VO_Federation\FederatedGroupShareProvider;
 use OCA\VO_Federation\OCM\CloudGroupFederationProviderFiles;
+use OCA\VO_Federation\Service\GroupsService;
 use OCA\VO_Federation\Service\ProviderService;
 use OCA\VO_Federation\Service\VirtualOrganisationService;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
+use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\IAppContainer;
 use OCP\Federation\ICloudFederationProviderManager;
 use OCP\IConfig;
@@ -68,19 +70,25 @@ class Application extends App implements IBootstrap {
 		$context->injectFn(function (EventDispatcher $dispatcher,
 			IConfig $config,
 			ProviderService $providerService,
-			VirtualOrganisationService $voService) {
+			GroupsService $groupsService) {
 			/*
 			 * @todo move the OCP events and then move the registration to `register`
 			 */
 			$dispatcher->addListener(
 				UserLoggedInEvent::class,
-				function (\OCP\User\Events\UserLoggedInEvent $event) use ($config, $providerService, $voService) {
+				function (\OCP\User\Events\UserLoggedInEvent $event) use ($config, $providerService, $groupsService) {
 					$providers = $providerService->getProvidersWithSettings();
-					foreach ($providers as $provider) {
-						$clientId = $provider[ProviderService::SETTING_CLIENT_ID];
+					foreach ($providers as $provider) {						
+						$providerId = $provider['id'];
 						$userId = $event->getUser()->getUID();
-						if ($config->getUserValue($userId, Application::APP_ID, $clientId . '-accessToken')) {
-							$voService->syncUser($userId, $clientId);
+						try {
+							$session = $providerService->getProviderSession($userId, $providerId);
+							if ($session !== null) {
+								$groupsService->syncUser($userId, $providerId);
+							}
+						} catch (DoesNotExistException $e) {							
+						} catch (\Exception $other) {
+							// TODO: Handle server availability
 						}
 					}
 				}

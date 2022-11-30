@@ -7,33 +7,21 @@ use OCA\VO_Federation\Service\ProviderService;
 
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IInitialState;
-use OCP\IConfig;
 use OCP\Settings\ISettings;
 use OCP\Util;
 
 class Personal implements ISettings {
 
-	/**
-	 * @var IConfig
-	 */
-	private $config;
-	/**
-	 * @var IInitialState
-	 */
+	/** @var IInitialState */
 	private $initialStateService;
-	/**
-	 * @var string|null
-	 */
+	/** @var string|null */
 	private $userId;
-
 	/** @var ProviderService */
 	private $providerService;
 
-	public function __construct(IConfig $config,
-								IInitialState $initialStateService,
+	public function __construct(IInitialState $initialStateService,
 								ProviderService $providerService,
 								?string $userId) {
-		$this->config = $config;
 		$this->initialStateService = $initialStateService;
 		$this->providerService = $providerService;
 		$this->userId = $userId;
@@ -43,27 +31,31 @@ class Personal implements ISettings {
 	 * @return TemplateResponse
 	 */
 	public function getForm(): TemplateResponse {
-		$providerIdLatest = (int) $this->config->getAppValue(Application::APP_ID, 'providerIdLatest', -1);
-		$providers = [];
-		for ($i = 0; $i <= $providerIdLatest;$i++) {
-			$providerSettings = $this->providerService->getProviderWithSettings($i);
-			$clientId = $providerSettings['clientId'];
-			if (!$clientId) {
-				continue;
+		$providerService = $this->providerService;
+		$userId = $this->userId;
+
+		$providers = $providerService->getProvidersWithSettings();
+		$providersWithSession = array_map(function(array $provider) use ($providerService, $userId) { 
+			$session = $providerService->getProviderSession($userId, $provider['id']);
+
+			$providerWithSession = [
+				'providerId' => $provider['id'],
+				'identifier' => $provider['identifier'],
+				'active' => false,
+				'displayName' => '',
+				'timestamp' => -1,
+			];
+
+			if ($session !== null) {
+				$providerWithSession['active'] = true;
+				$providerWithSession['displayName'] = $session['userinfoDisplayName'];
+				$providerWithSession['timestamp'] = $session['lastSync'];
 			}
 
-			$displayName = $this->config->getUserValue($this->userId, Application::APP_ID, $clientId . '-displayName', '');
-			$timestamp = $this->config->getUserValue($this->userId, Application::APP_ID, $clientId . '-timestamp', '');
-
-			$providers[] = [
-				'providerId' => $i,
-				'identifier' => $providerSettings['identifier'],
-				'clientId' => $clientId,
-				'displayName' => $displayName,
-				'timestamp' => $timestamp
-			];
-		}
-		$this->initialStateService->provideInitialState('user-config', $providers);
+			return $providerWithSession;
+		}, $providers);
+		
+		$this->initialStateService->provideInitialState('user-config', $providersWithSession);
 
 		Util::addScript(Application::APP_ID, Application::APP_ID . '-personalSettings');
 		return new TemplateResponse(Application::APP_ID, 'personalSettings');

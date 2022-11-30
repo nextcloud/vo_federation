@@ -34,9 +34,9 @@ class Version000000Date20220823234000 extends SimpleMigrationStep {
 				// empty strings in notnull columns
 				'default' => 'name',
 			]);
-			$table->addColumn('aai', 'string', [
-				'length' => 255,
-				'default' => '',
+			$table->addColumn('provider_id', 'integer', [
+				'notnull' => true,
+				'length' => 4,
 			]);
 			//$table->setPrimaryKey(['gid']);
 		}
