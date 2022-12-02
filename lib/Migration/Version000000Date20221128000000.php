@@ -26,7 +26,7 @@ class Version000000Date20221128000000 extends SimpleMigrationStep {
 		/** @var ISchemaWrapper $schema */
 		$schema = $schemaClosure();
 
-		if (!$schema->hasTable('vo_oidc_providers')) {		
+		if (!$schema->hasTable('vo_oidc_providers')) {
 			$table = $schema->createTable('vo_oidc_providers');
 			$table->addColumn('id', Types::INTEGER, [
 				'autoincrement' => true,
@@ -74,13 +74,13 @@ class Version000000Date20221128000000 extends SimpleMigrationStep {
 				'default' => '.*',
 				'notnull' => true,
 			]);
-			$table->addColumn('settings', TYPES::JSON);			
+			$table->addColumn('settings', TYPES::JSON);
 
 			$table->setPrimaryKey(['id']);
 			$table->addUniqueIndex(['identifier']);
 		}
 
-		if (!$schema->hasTable('vo_trusted_instances')) {		
+		if (!$schema->hasTable('vo_trusted_instances')) {
 			$table = $schema->createTable('vo_trusted_instances');
 			$table->addColumn('id', Types::INTEGER, [
 				'autoincrement' => true,
@@ -99,11 +99,11 @@ class Version000000Date20221128000000 extends SimpleMigrationStep {
 			$table->addUniqueIndex(['provider_id', 'instance_url']);
 		}
 
-		if (!$schema->hasTable('vo_oidc_sessions')) {	
+		if (!$schema->hasTable('vo_oidc_sessions')) {
 			$table->addColumn('id', Types::INTEGER, [
 				'autoincrement' => true,
 				'notnull' => true,
-			]);			
+			]);
 			$table = $schema->createTable('vo_oidc_sessions');
 			$table->addColumn('uid', Types::STRING, [
 				'notnull' => true,

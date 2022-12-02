@@ -46,7 +46,6 @@ use OCP\ILogger;
 use OCP\IRequest;
 use OCP\ISession;
 use OCP\IURLGenerator;
-use OCP\IUserSession;
 use OCP\Security\ISecureRandom;
 
 class LoginController extends Controller {
@@ -135,7 +134,7 @@ class LoginController extends Controller {
 		], TemplateResponse::RENDER_AS_ERROR);
 		$response->setStatus(Http::STATUS_NOT_FOUND);
 		return $response;
-	}	
+	}
 
 	/**
 	 * @PublicPage
@@ -151,7 +150,7 @@ class LoginController extends Controller {
 	public function login(int $providerId) {
 		if (!$this->isSecure()) {
 			return $this->generateProtocolErrorResponse();
-		}		
+		}
 		$this->logger->debug('Initiating login for provider with id: ' . $providerId);
 
 		//TODO: handle exceptions
@@ -355,28 +354,28 @@ class LoginController extends Controller {
 	}
 
 	/**
-	* @param string $authorizationEndpoint
-	* @param array $extraGetParameters
-	* @return string
-	*/
-   public function buildAuthorizationUrl(string $authorizationEndpoint, array $extraGetParameters = []): string {
-	   $parsedUrl = parse_url($authorizationEndpoint);
+	 * @param string $authorizationEndpoint
+	 * @param array $extraGetParameters
+	 * @return string
+	 */
+	public function buildAuthorizationUrl(string $authorizationEndpoint, array $extraGetParameters = []): string {
+		$parsedUrl = parse_url($authorizationEndpoint);
 
-	   $urlWithoutParams =
+		$urlWithoutParams =
 		   (isset($parsedUrl['scheme']) ? $parsedUrl['scheme'] . '://' : '')
 		   . ($parsedUrl['host'] ?? '')
 		   . (isset($parsedUrl['port']) ? ':' . $parsedUrl['port'] : '')
 		   . ($parsedUrl['path'] ?? '');
 
-	   $queryParams = $extraGetParameters;
-	   if (isset($parsedUrl['query'])) {
-		   parse_str($parsedUrl['query'], $parsedQueryParams);
-		   $queryParams = array_merge($queryParams, $parsedQueryParams);
-	   }
+		$queryParams = $extraGetParameters;
+		if (isset($parsedUrl['query'])) {
+			parse_str($parsedUrl['query'], $parsedQueryParams);
+			$queryParams = array_merge($queryParams, $parsedQueryParams);
+		}
 
-	   // sanitize everything before the query parameters
-	   // and trust http_build_query to sanitize the query parameters
-	   return htmlentities(filter_var($urlWithoutParams, FILTER_SANITIZE_URL), ENT_QUOTES)
+		// sanitize everything before the query parameters
+		// and trust http_build_query to sanitize the query parameters
+		return htmlentities(filter_var($urlWithoutParams, FILTER_SANITIZE_URL), ENT_QUOTES)
 		   . (empty($queryParams) ? '' : '?' . http_build_query($queryParams));
-   }
+	}
 }

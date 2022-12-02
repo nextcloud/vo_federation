@@ -5,12 +5,10 @@ declare(strict_types=1);
 namespace OCA\VO_Federation\Service;
 
 use OC\Group\Group;
-use OCA\VO_Federation\AppInfo\Application;
 use OCA\VO_Federation\Backend\GroupBackend;
 use OCA\VO_Federation\Db\Session;
 use OCA\VO_Federation\Db\SessionMapper;
 use OCP\Http\Client\IClientService;
-use OCP\IConfig;
 use OCP\IGroupManager;
 use OCP\IUserManager;
 use OCP\ILogger;
@@ -51,7 +49,7 @@ class GroupsService {
 		// TODO: Check for expiration
 		$provider = $this->providerService->getProvider($session->getProviderId());
 		$providerSettings = $provider->getSettings() ?? [];
-		$tokenEndpoint = $providerSettings[ProviderService::SETTING_TOKEN_ENDPOINT];		
+		$tokenEndpoint = $providerSettings[ProviderService::SETTING_TOKEN_ENDPOINT];
 
 		$this->logger->debug('Fetching token endpoint for access_token');
 		$client = $this->clientService->newClient();
@@ -67,7 +65,7 @@ class GroupsService {
 				],
 				'headers' => [
 					'Authorization' => 'Basic ' . base64_encode($provider->getClientId() . ':' . $provider->getClientSecret()),
-				],					
+				],
 			]
 		);
 
@@ -80,12 +78,12 @@ class GroupsService {
 	}
 
 	private function fetchUserinfo($session) : array {
-		$provider = $this->providerService->getProvider($session->getProviderId());		
+		$provider = $this->providerService->getProvider($session->getProviderId());
 		$providerSettings = $provider->getSettings() ?? [];
-		$userinfoEndpoint = $providerSettings[ProviderService::SETTING_USERINFO_ENDPOINT];	
+		$userinfoEndpoint = $providerSettings[ProviderService::SETTING_USERINFO_ENDPOINT];
 						
-		$this->logger->debug('Fetching user info endpoint');		
-		$client = $this->clientService->newClient();		
+		$this->logger->debug('Fetching user info endpoint');
+		$client = $this->clientService->newClient();
 		
 		$result = $client->get(
 			$userinfoEndpoint,
@@ -114,7 +112,7 @@ class GroupsService {
 		// Update AAI display name in Connected accounts
 		$userinfoDisplayName = $userinfo[$displaynameAttribute];
 		if ($userinfoDisplayName) {
-			$session->setUserinfoDisplayName($userinfoDisplayName);			
+			$session->setUserinfoDisplayName($userinfoDisplayName);
 		}
 
 		// TODO: Throw exception on missing groups attribute
@@ -129,7 +127,7 @@ class GroupsService {
 				$group->addUser($user);
 			}
 			// Remove gid from localGroups to be deleted
- 			$localGroups = array_diff($localGroups, [$gid]);
+			$localGroups = array_diff($localGroups, [$gid]);
 		}
 
 		foreach ($localGroups as $gid) {
@@ -146,7 +144,7 @@ class GroupsService {
 		$session = $this->sessionMapper->update($session);
 	}
 
-	// 
+	//
 	private function createOrUpdateLocalGroup($provider, $gid) : Group {
 		// Generate new display name
 		$groupsRegex = $provider->getGroupsRegex();
@@ -163,7 +161,7 @@ class GroupsService {
 				$group->setDisplayName($displayName);
 			}
 			if ($this->voGroupBackend->getProviderId($gid) !== $provider->getId()) {
-				$this->voGroupBackend->setProviderId($gid, $provider->getId());	
+				$this->voGroupBackend->setProviderId($gid, $provider->getId());
 			}
 		} else {
 			$this->voGroupBackend->createGroup($gid, $displayName);
@@ -221,6 +219,4 @@ class GroupsService {
 			}
 		}
 	}
-
 }
-

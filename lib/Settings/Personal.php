@@ -35,7 +35,7 @@ class Personal implements ISettings {
 		$userId = $this->userId;
 
 		$providers = $providerService->getProvidersWithSettings();
-		$providersWithSession = array_map(function(array $provider) use ($providerService, $userId) { 
+		$providersWithSession = array_map(function (array $provider) use ($providerService, $userId) {
 			$session = $providerService->getProviderSession($userId, $provider['id']);
 
 			$providerWithSession = [

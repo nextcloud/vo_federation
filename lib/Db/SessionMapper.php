@@ -8,12 +8,10 @@ use OCP\AppFramework\Db\QBMapper;
 use OCP\IDBConnection;
 
 use OCP\AppFramework\Db\DoesNotExistException;
-use OCP\AppFramework\Db\MultipleObjectsReturnedException;
 
 use DateTime;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\AppFramework\Utility\ITimeFactory;
-
 
 class SessionMapper extends QBMapper {
 
@@ -22,7 +20,7 @@ class SessionMapper extends QBMapper {
 
 	public function __construct(IDBConnection $db, ITimeFactory $timeFactory) {
 		parent::__construct($db, 'vo_oidc_sessions', Session::class);
-		$this->timeFactory = $timeFactory;		
+		$this->timeFactory = $timeFactory;
 	}
 
 	public function getSession(int $id): Session {
@@ -63,15 +61,14 @@ class SessionMapper extends QBMapper {
 				$qb->expr()->eq('provider_id', $qb->createNamedParameter($providerId, IQueryBuilder::PARAM_INT))
 			);
 		$result = $qb->executeStatement();
-		return $result;		
+		return $result;
 	}
 
-	public function createOrUpdateSession(string $uid, int $providerId,	
+	public function createOrUpdateSession(string $uid, int $providerId,
 									string $idToken, string $idTokenSub, int $idTokenExp,
 									string $accessToken, int $accessTokenExp,
 									string $refreshToken, int $refreshTokenExp,
 									string $userinfoDisplayName = null, DateTime $lastSync = null) {
-
 		try {
 			$session = $this->findSessionByProviderId($uid, $providerId);
 		} catch (DoesNotExistException $eNotExist) {
@@ -117,6 +114,5 @@ class SessionMapper extends QBMapper {
 			}
 			return $this->update($session);
 		}
-	}	
+	}
 }
-

@@ -28,8 +28,6 @@ namespace OCA\VO_Federation\Db;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\IDBConnection;
 
-use OCP\AppFramework\Db\DoesNotExistException;
-
 class ProviderMapper extends QBMapper {
 	public function __construct(IDBConnection $db) {
 		parent::__construct($db, 'vo_oidc_providers', Provider::class);

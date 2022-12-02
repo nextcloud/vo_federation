@@ -2,8 +2,6 @@
 
 namespace OCA\VO_Federation\Db;
 
-use OCP\AppFramework\Db\DoesNotExistException;
-use OCP\AppFramework\Db\Entity;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
@@ -35,5 +33,5 @@ class TrustedInstanceMapper extends QBMapper {
 			);
 		$result = $qb->executeStatement();
 		return $result;
-	}	
+	}
 }

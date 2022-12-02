@@ -46,10 +46,9 @@ class SettingsController extends Controller {
 	private $providerService;
 	/** @var GroupsService */
 	private $groupsService;
-	/** @var string|null */
 	private IEventDispatcher $eventDispatcher;
-
-	private $userId;	
+	/** @var string|null */
+	private $userId;
 
 	public function __construct(
 		IRequest $request,
@@ -66,7 +65,7 @@ class SettingsController extends Controller {
 		$this->groupsService = $groupsService;
 		$this->eventDispatcher = $eventDispatcher;
 
-		$this->userId = $userId;		
+		$this->userId = $userId;
 	}
 
 	public function createProvider(string $identifier, string $clientId, string $clientSecret, string $discoveryEndpoint = null,
@@ -121,13 +120,13 @@ class SettingsController extends Controller {
 		$oldGroupsRegex = $provider->getGroupsRegex();
 		
 		$provider->setGroupsClaim($groupsClaim);
-		$provider->setGroupsRegex($groupsRegex);	
+		$provider->setGroupsRegex($groupsRegex);
 
 		$provider = $this->providerMapper->update($provider);
 		// TODO: Create Event to enable other components to react to changes in federation composition
 		$changedTrustedInstances = $this->providerService->createOrUpdateTrustedInstances($providerId, $trustedInstances);
 		if ($changedTrustedInstances) {
-			$this->eventDispatcher->dispatchTyped(new VOFederationChangeEvent($providerId, $trustedInstances))
+			$this->eventDispatcher->dispatchTyped(new VOFederationChangeEvent($providerId, $trustedInstances));
 		}
 
 
@@ -165,5 +164,5 @@ class SettingsController extends Controller {
 	public function logoutProvider(int $providerId): JSONResponse {
 		$this->providerService->deleteProviderSession($this->userId, $providerId);
 		return new JSONResponse([], Http::STATUS_OK);
-	}	
+	}
 }

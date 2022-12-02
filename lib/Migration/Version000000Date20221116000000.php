@@ -30,7 +30,7 @@ class Version000000Date20221116000000 extends SimpleMigrationStep {
 			$table->addColumn('parent', Types::BIGINT, [
 				'notnull' => true,
 			]);
-			$table->addUniqueIndex(['id', 'parent']);			
+			$table->addUniqueIndex(['id', 'parent']);
 		}
 		
 		return $schema;

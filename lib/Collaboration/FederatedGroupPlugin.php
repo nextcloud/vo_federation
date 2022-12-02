@@ -38,7 +38,6 @@ use OCP\IUserSession;
 use OCP\Share\IShare;
 use OCA\VO_Federation\Backend\GroupBackend;
 use OCA\VO_Federation\Service\ProviderService;
-use OCP\Group\Backend\IGroupDetailsBackend;
 
 class FederatedGroupPlugin implements ISearchPlugin {
 	/** @var bool */
@@ -103,7 +102,7 @@ class FederatedGroupPlugin implements ISearchPlugin {
 		}
 		
 		$voGroupBackend = $this->voGroupBackend;
-		$federatedGroups = array_filter($groups, function(IGroup $group) use ($voGroupBackend) {
+		$federatedGroups = array_filter($groups, function (IGroup $group) use ($voGroupBackend) {
 			return $voGroupBackend->groupExists($group->getGID());
 		});
 		$federatedGroups = array_map(function (IGroup $group) {
@@ -139,7 +138,7 @@ class FederatedGroupPlugin implements ISearchPlugin {
 					'label' => $group->getDisplayName(),
 					'value' => [
 						'shareType' => IShare::TYPE_FEDERATED_GROUP,
-						'shareWith' => $gid						
+						'shareWith' => $gid
 					],
 					'shareWithDescription' => $this->getShareWithDescription($gid)
 				];
@@ -157,7 +156,7 @@ class FederatedGroupPlugin implements ISearchPlugin {
 						'shareType' => IShare::TYPE_FEDERATED_GROUP,
 						'shareWith' => $group->getGID()
 					],
-					'shareWithDescription' => $this->getShareWithDescription($group->getGID())					
+					'shareWithDescription' => $this->getShareWithDescription($group->getGID())
 				];
 			}
 		}
@@ -177,5 +176,4 @@ class FederatedGroupPlugin implements ISearchPlugin {
 		$provider = $this->providerService->getProvider($providerId);
 		return $provider->getIdentifier();
 	}
-
 }

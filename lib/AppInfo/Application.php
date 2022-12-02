@@ -16,7 +16,6 @@ use OCA\VO_Federation\FederatedGroupShareProvider;
 use OCA\VO_Federation\OCM\CloudGroupFederationProviderFiles;
 use OCA\VO_Federation\Service\GroupsService;
 use OCA\VO_Federation\Service\ProviderService;
-use OCA\VO_Federation\Service\VirtualOrganisationService;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\AppFramework\Bootstrap\IBootContext;
@@ -78,7 +77,7 @@ class Application extends App implements IBootstrap {
 				UserLoggedInEvent::class,
 				function (\OCP\User\Events\UserLoggedInEvent $event) use ($config, $providerService, $groupsService) {
 					$providers = $providerService->getProvidersWithSettings();
-					foreach ($providers as $provider) {						
+					foreach ($providers as $provider) {
 						$providerId = $provider['id'];
 						$userId = $event->getUser()->getUID();
 						try {
@@ -86,7 +85,7 @@ class Application extends App implements IBootstrap {
 							if ($session !== null) {
 								$groupsService->syncUser($userId, $providerId);
 							}
-						} catch (DoesNotExistException $e) {							
+						} catch (DoesNotExistException $e) {
 						} catch (\Exception $other) {
 							// TODO: Handle server availability
 						}

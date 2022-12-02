@@ -26,7 +26,6 @@ declare(strict_types=1);
 
 namespace OCA\VO_Federation\Service;
 
-use OCA\VO_Federation\AppInfo\Application;
 use OCA\VO_Federation\Db\Provider;
 use OCA\VO_Federation\Db\ProviderMapper;
 use OCA\VO_Federation\Db\Session;
@@ -69,10 +68,10 @@ class ProviderService {
 	public function getProvidersWithSettings(): array {
 		$trustedInstanceMapper = $this->trustedInstanceMapper;
 		$providers = $this->providerMapper->getProviders();
-		return array_map(function($provider) use ($trustedInstanceMapper) {
+		return array_map(function ($provider) use ($trustedInstanceMapper) {
 			$trustedInstances = $trustedInstanceMapper->findAll($provider->getId());
 			$provider = $provider->jsonSerialize();
-			$provider['trustedInstances'] = array_map(function($trustedInstance) {
+			$provider['trustedInstances'] = array_map(function ($trustedInstance) {
 				return $trustedInstance->getInstanceUrl();
 			}, $trustedInstances);
 			return $provider;
@@ -81,7 +80,7 @@ class ProviderService {
 
 	public function getProvider(int $providerId): Provider {
 		return $this->providerMapper->getProvider($providerId);
-	}	
+	}
 
 	public function getProviderByIdentifier(string $identifier): ?Provider {
 		try {
@@ -133,7 +132,7 @@ class ProviderService {
 				$insertedOrDeleted++;
 			}
 		}
-		foreach($newTrustedInstances as $instanceUrl) {
+		foreach ($newTrustedInstances as $instanceUrl) {
 			if (in_array($instanceUrl, $existingNewTrustedInstances)) {
 				continue;
 			}
@@ -155,5 +154,4 @@ class ProviderService {
 			self::SETTING_EXTRA_CLAIMS,
 		];
 	}
-
 }

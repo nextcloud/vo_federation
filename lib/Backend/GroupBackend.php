@@ -395,7 +395,7 @@ class GroupBackend extends ABackend implements
 	public function setDisplayName(string $gid, string $displayName): bool {
 		$this->fixDI();
 
-		$qb = $this->dbConn->getQueryBuilder();		
+		$qb = $this->dbConn->getQueryBuilder();
 		$result = $qb->update('vo_groups')
 			->set('displayname', $qb->createNamedParameter($displayName))
 			->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
@@ -403,8 +403,8 @@ class GroupBackend extends ABackend implements
 
 		$this->groupCache[$gid]['displayname'] = $displayName;
 
-		return $result === 1;		
-	}	
+		return $result === 1;
+	}
 
 	public function getProviderId(string $gid): int {
 		if (isset($this->groupCache[$gid])) {
@@ -432,13 +432,13 @@ class GroupBackend extends ABackend implements
 	public function setProviderId(string $gid, int $providerId) : bool {
 		$this->fixDI();
 
-		$qb = $this->dbConn->getQueryBuilder();		
+		$qb = $this->dbConn->getQueryBuilder();
 		$result = $qb->update('vo_groups')
 			->set('provider_id', $qb->createNamedParameter($providerId))
 			->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
 			->executeStatement();
 
-		$this->groupCache[$gid]['providerId'] = $providerId;		
+		$this->groupCache[$gid]['providerId'] = $providerId;
 
 		return $result === 1;
 	}
