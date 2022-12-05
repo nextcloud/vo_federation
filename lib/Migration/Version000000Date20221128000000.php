@@ -100,11 +100,11 @@ class Version000000Date20221128000000 extends SimpleMigrationStep {
 		}
 
 		if (!$schema->hasTable('vo_oidc_sessions')) {
+			$table = $schema->createTable('vo_oidc_sessions');
 			$table->addColumn('id', Types::INTEGER, [
 				'autoincrement' => true,
 				'notnull' => true,
 			]);
-			$table = $schema->createTable('vo_oidc_sessions');
 			$table->addColumn('uid', Types::STRING, [
 				'notnull' => true,
 				'length' => 64,
