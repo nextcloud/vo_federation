@@ -54,14 +54,14 @@ class ProviderService {
 	private $trustedInstanceMapper;
 
 	/** @var GroupsService */
-	private $groupsService;
+	//private $groupsService;
 
-	public function __construct(IConfig $config, ProviderMapper $providerMapper, SessionMapper $sessionMapper, TrustedInstanceMapper $trustedInstanceMapper, GroupsService $groupsService) {
+	public function __construct(IConfig $config, ProviderMapper $providerMapper, SessionMapper $sessionMapper, TrustedInstanceMapper $trustedInstanceMapper, /*GroupsService $groupsService*/) {
 		$this->config = $config;
 		$this->providerMapper = $providerMapper;
 		$this->sessionMapper = $sessionMapper;
 		$this->trustedInstanceMapper = $trustedInstanceMapper;
-		$this->groupsService = $groupsService;
+		//$this->groupsService = $groupsService;
 	}
 
 
@@ -106,7 +106,7 @@ class ProviderService {
 		$this->trustedInstanceMapper->deleteAll($providerId);
 		$this->sessionMapper->deleteAllSessions($providerId);
 
-		$this->groupsService->removeAllProviderMemberships($provider);
+		//$this->groupsService->removeAllProviderMemberships($provider);
 
 		return $provider;
 	}
@@ -114,7 +114,7 @@ class ProviderService {
 	public function deleteProviderSession(string $uid, int $providerId) : Session {
 		$deletedSession = $this->sessionMapper->deleteSession($uid, $providerId);
 
-		$this->groupsService->removeAllSessionMemberships($deletedSession);
+		//$this->groupsService->removeAllSessionMemberships($deletedSession);
 
 		return $deletedSession;
 	}
