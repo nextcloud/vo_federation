@@ -1,5 +1,7 @@
 <?php
 
+namespace OCA\VO_Federation\Event;
+
 use OCP\EventDispatcher\Event;
 
 class VOFederationChangeEvent extends Event {

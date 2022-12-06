@@ -42,7 +42,7 @@ class Admin implements ISettings {
 	/** @var IURLGenerator */
 	private $urlGenerator;
 
-	/** @var IInitialStateService */
+	/** @var IInitialState */
 	private $initialStateService;
 
 	public function __construct(ProviderService $providerService,
@@ -54,14 +54,10 @@ class Admin implements ISettings {
 	}
 
 	public function getForm() {
-		$this->initialStateService->provideInitialState(
-			Application::APP_ID,
-			'providers',
+		$this->initialStateService->provideInitialState('providers',
 			$this->providerService->getProvidersWithSettings()
 		);
-		$this->initialStateService->provideInitialState(
-			Application::APP_ID,
-			'redirectUrl',
+		$this->initialStateService->provideInitialState('redirectUrl',
 			$this->urlGenerator->linkToRouteAbsolute('vo_federation.login.code')
 		);
 

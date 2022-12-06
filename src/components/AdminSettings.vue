@@ -36,20 +36,20 @@
 			</p>
 			<div v-for="provider in providers"
 				v-else
-				:key="provider.providerId"
+				:key="provider.id"
 				class="oidcproviders__provider">
 				<div class="oidcproviders__details">
 					<b>{{ provider.identifier }}</b><br>
 					{{ t('vo_federation', 'Client ID') }}: {{ provider.clientId }}<br>
-					{{ t('vo_federation', 'Authorization endpoint') }}: {{ provider.authorizationEndpoint }}
+					{{ t('vo_federation', 'Authorization endpoint') }}: {{ provider.settings.authorizationEndpoint }}
 				</div>
 				<Actions>
-					<ActionButton icon="icon-rename" @click="updateProvider(provider.providerId)">
+					<ActionButton icon="icon-rename" @click="updateProvider(provider.id)">
 						{{ t('vo_federation', 'Update') }}
 					</ActionButton>
 				</Actions>
 				<Actions>
-					<ActionButton icon="icon-delete" @click="onRemove(provider.providerId)">
+					<ActionButton icon="icon-delete" @click="onRemove(provider.id)">
 						{{ t('vo_federation', 'Remove') }}
 					</ActionButton>
 				</Actions>
@@ -66,56 +66,65 @@
 						<label for="oidc-client-id">{{ t('vo_federation', 'Name') }}</label>
 						<input id="oidc-client-identifier"
 							v-model="editProvider.identifier"
+							required
 							type="text">
 					</p>
 					<p>
 						<label for="oidc-client-id">{{ t('vo_federation', 'Client ID') }}</label>
 						<input id="oidc-client-id"
 							v-model="editProvider.clientId"
+							required
 							type="text">
 					</p>
 					<p>
 						<label for="oidc-client-secret">{{ t('vo_federation', 'Client secret') }}</label>
 						<input id="oidc-client-secret"
 							v-model="editProvider.clientSecret"
+							:required="!isUpdating"
+							:placeholder="isUpdating ? t('vo_federation', 'Leave empty to keep existing') : null"
 							type="password"
 							autocomplete="off">
 					</p>
 					<p>
 						<label for="oidc-authorization-endpoint">{{ t('vo_federation', 'Authorization endpoint') }}</label>
 						<input id="oidc-authorization-endpoint"
-							v-model="editProvider.authorizationEndpoint"
+							v-model="editProvider.settings.authorizationEndpoint"
+							required
 							type="text">
 					</p>
 					<p>
 						<label for="oidc-token-endpoint">{{ t('vo_federation', 'Token endpoint') }}</label>
 						<input id="oidc-token-endpoint"
-							v-model="editProvider.tokenEndpoint"
+							v-model="editProvider.settings.tokenEndpoint"
+							required
 							type="text">
 					</p>
 					<p>
 						<label for="oidc-jwks-endpoint">{{ t('vo_federation', 'JWKS endpoint') }}</label>
 						<input id="oidc-jwks-endpoint"
-							v-model="editProvider.jwksEndpoint"
+							v-model="editProvider.settings.jwksEndpoint"
+							required
 							type="text">
 					</p>
 					<p>
 						<label for="oidc-userinfo-endpoint">{{ t('vo_federation', 'Userinfo endpoint') }}</label>
 						<input id="oidc-userinfo-endpoint"
-							v-model="editProvider.userinfoEndpoint"
+							v-model="editProvider.settings.userinfoEndpoint"
+							required
 							type="text">
 					</p>
 					<p>
 						<label for="oidc-scope">{{ t('vo_federation', 'Scope') }}</label>
 						<input id="oidc-scope"
 							v-model="editProvider.scope"
+							required
 							type="text"
 							placeholder="openid email profile">
 					</p>
 					<p>
 						<label for="oidc-extra-claims">{{ t('vo_federation', 'Extra claims') }}</label>
 						<input id="oidc-extra-claims"
-							v-model="editProvider.extraClaims"
+							v-model="editProvider.settings.extraClaims"
 							type="text"
 							placeholder="claim1 claim2 claim3">
 					</p>
@@ -125,28 +134,32 @@
 					<p>
 						<label for="mapping-uid">{{ t('vo_federation', 'User ID mapping') }}</label>
 						<input id="mapping-uid"
-							v-model="editProvider.mappingUid"
+							v-model="editProvider.uidClaim"
+							required
 							type="text"
 							placeholder="sub">
 					</p>
 					<p>
 						<label for="mapping-displayName">{{ t('vo_federation', 'Display name mapping') }}</label>
 						<input id="mapping-displayName"
-							v-model="editProvider.mappingDisplayName"
+							v-model="editProvider.displayNameClaim"
+							required
 							type="text"
 							placeholder="name">
 					</p>
 					<p>
 						<label for="mapping-group">{{ t('vo_federation', 'Groups mapping') }}</label>
 						<input id="mapping-group"
-							v-model="editProvider.mappingGroups"
+							v-model="editProvider.groupsClaim"
+							required
 							type="text"
 							placeholder="groups">
 					</p>
 					<p>
 						<label for="mapping-regex-pattern">{{ t('vo_federation', 'Regex pattern') }}</label>
 						<input id="mapping-regex-pattern"
-							v-model="editProvider.mappingRegexPattern"
+							v-model="editProvider.groupsRegex"
+							required
 							type="text"
 							placeholder=".*">
 					</p>
@@ -181,8 +194,8 @@
 						</p>
 					</div>
 					<fieldset style="margin-top: 10px">
+						<input type="submit" :value="t('vo_federation', isUpdating ? 'Update' : 'Create')">
 						<input type="button" :value="t('vo_federation', 'Cancel')" @click="editProvider = null">
-						<input type="submit" :value="t('vo_federation', 'Update')">
 					</fieldset>
 				</form>
 			</div>
@@ -201,18 +214,23 @@ import ListItem from '@nextcloud/vue/dist/Components/ListItem'
 import Modal from '@nextcloud/vue/dist/Components/Modal'
 
 const provider = {
-	providerId: null,
+	id: null,
+	identifier: '',
 	clientId: '',
 	clientSecret: '',
-	authorizationEndpoint: '',
-	tokenEndpoint: '',
-	userinfoEndpoint: '',
-	jwksEndpoint: '',
+	discoveryEndpoint: '',
 	scope: '',
-	extraClaims: '',
-	mappingUid: '',
-	mappingDisplayName: '',
-	mappingGroups: '',
+	uidClaim: '',
+	displayNameClaim: '',
+	groupsClaim: '',
+	groupsRegex: '',
+	settings: {
+		authorizationEndpoint: '',
+		tokenEndpoint: '',
+		jwksEndpoint: '',
+		userinfoEndpoint: '',
+		extraClaims: '',
+	},
 	trustedInstances: [],
 }
 
@@ -233,20 +251,23 @@ export default {
 	},
 	computed: {
 		modalTitle() {
-			return this.editProvider.providerId != null
+			return this.editProvider?.id != null
 				? this.editProvider.clientId
 				: t('user_oids', 'Register a new provider')
+		},
+		isUpdating() {
+			return this.editProvider?.id != null
 		},
 	},
 	methods: {
 		async onSubmit() {
-			if (this.editProvider.providerId == null) {
+			if (this.editProvider.id == null) {
 				const url = generateUrl('/apps/vo_federation/provider')
 				try {
-					const response = await axios.post(url, { values: this.editProvider })
+					const response = await axios.post(url, this.editProvider)
 					this.providers.push({
 						...this.editProvider,
-						providerId: response.data.providerId,
+						id: response.data.id,
 					})
 					this.editProvider = null
 					showSuccess(t('vo_federation', 'Provider created successfully'))
@@ -255,10 +276,10 @@ export default {
 					showError(t('vo_federation', 'Could not create the provider:') + ' ' + (error.response?.data?.message ?? error.message))
 				}
 			} else {
-				const url = generateUrl(`/apps/vo_federation/provider/${this.editProvider.providerId}`)
+				const url = generateUrl(`/apps/vo_federation/provider/${this.editProvider.id}`)
 				try {
-					await axios.put(url, { values: this.editProvider })
-					const providerIndex = this.providers.findIndex(provider => provider.providerId === this.editProvider.providerId)
+					await axios.put(url, this.editProvider)
+					const providerIndex = this.providers.findIndex(provider => provider.id === this.editProvider.id)
 					if (providerIndex > -1) {
 						this.$set(this.providers, providerIndex, this.editProvider)
 					}
@@ -274,13 +295,13 @@ export default {
 			const url = generateUrl(`/apps/vo_federation/provider/${providerId}`)
 			try {
 				await axios.delete(url)
-				this.providers = this.providers.filter(provider => provider.providerId !== providerId)
+				this.providers = this.providers.filter(provider => provider.id !== providerId)
 			} catch (error) {
 				showError(t('vo_federation', 'Could not remove provider: ' + error.message))
 			}
 		},
 		updateProvider(providerId) {
-			const providerIndex = this.providers.findIndex(provider => provider.providerId === providerId)
+			const providerIndex = this.providers.findIndex(provider => provider.id === providerId)
 			if (providerIndex > -1) {
 				this.editProvider = { ...this.providers[providerIndex] }
 			}

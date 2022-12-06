@@ -36,8 +36,7 @@ use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\EventDispatcher\IEventDispatcher;
 use OCP\IRequest;
-use VOFederationChangeEvent;
-
+use OCA\VO_Federation\Event\VOFederationChangeEvent;
 class SettingsController extends Controller {
 
 	/** @var ProviderMapper */

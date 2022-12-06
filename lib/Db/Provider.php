@@ -71,6 +71,9 @@ class Provider extends Entity implements \JsonSerializable {
 	/** @var mixed */
 	protected $settings;
 
+	public function __construct() {
+		$this->addType('settings', 'json');
+	}
 
 	#[\ReturnTypeWillChange]
 	public function jsonSerialize() {
@@ -78,6 +81,7 @@ class Provider extends Entity implements \JsonSerializable {
 			'id' => $this->id,
 			'identifier' => $this->identifier,
 			'clientId' => $this->clientId,
+			// Skip clientSecret
 			'discoveryEndpoint' => $this->discoveryEndpoint,
 			'scope' => $this->scope,
 			'uidClaim' => $this->uidClaim,
