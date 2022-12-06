@@ -196,19 +196,22 @@ class FederatedGroupShareProvider implements IShareProvider {
 			throw new \Exception($message_t);
 		}
 
-		$aai = $this->groupBackend->getAAI($shareWith);
-		$trustedInstances = $this->providerService->getSettingTrustedInstancesForClientId($aai);
-		if (empty($aai)) {
+		try {
+			$providerId = $this->groupBackend->getProviderId($shareWith);
+		} catch (\Exception $e) {
 			$message = 'Cannot find Community AAI for Group Id';
 			throw new \Exception($message);
-		} elseif (empty($trustedInstances)) {
+		}
+		
+		$trustedInstances = $this->providerService->getProviderTrustedInstances($providerId);
+		if (empty($trustedInstances)) {
 			$message = 'No trusted instances configured for Community AAI';
 			throw new \Exception($message);
 		}
 
 		$firstShareId = null;
-		foreach ($trustedInstances as $url) {
-			$currentShareWith = $shareWith . '@' . $url;
+		foreach ($trustedInstances as $trustedInstance) {
+			$currentShareWith = $shareWith . '@' . $trustedInstance->getInstanceUrl();
 
 			/*
 			* Check if file is not already shared with the remote user
