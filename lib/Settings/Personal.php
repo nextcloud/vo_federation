@@ -48,8 +48,10 @@ class Personal implements ISettings {
 
 			if ($session !== null) {
 				$providerWithSession['active'] = true;
-				$providerWithSession['displayName'] = $session['userinfoDisplayName'];
-				$providerWithSession['timestamp'] = $session['lastSync'];
+				$providerWithSession['displayName'] = $session->getUserinfoDisplayName();
+				if ($session->getLastSync()) {
+					$providerWithSession['timestamp'] = $session->getLastSync()->getTimestamp();
+				}
 			}
 
 			return $providerWithSession;

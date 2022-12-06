@@ -35,7 +35,7 @@ class Version000000Date20220823234000 extends SimpleMigrationStep {
 				'default' => 'name',
 			]);
 			$table->addColumn('provider_id', 'integer', [
-				'notnull' => true,
+				'notnull' => false,
 				'length' => 4,
 			]);
 			//$table->setPrimaryKey(['gid']);

@@ -33,7 +33,7 @@ use OCA\VO_Federation\Db\SessionMapper;
 use OCA\VO_Federation\Db\TrustedInstance;
 use OCA\VO_Federation\Db\TrustedInstanceMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
-use OCP\IConfig;
+use OCP\AppFramework\IAppContainer;
 
 class ProviderService {
 	public const SETTING_AUTHORIZATION_ENDPOINT = 'authorizationEndpoint';
@@ -44,26 +44,21 @@ class ProviderService {
 	public const SETTING_JWKS_CACHE = 'jwksCache';
 	public const SETTING_JWKS_CACHE_TIMESTAMP = 'jwksCacheTimestamp';
 
-	/** @var IConfig */
-	private $config;
 	/** @var ProviderMapper */
 	private $providerMapper;
 	/** @var SessionMapper */
 	private $sessionMapper;
 	/** @var TrustedInstanceMapper */
 	private $trustedInstanceMapper;
+	/** @var IAppContainer */
+	private $appContainer;
 
-	/** @var GroupsService */
-	//private $groupsService;
-
-	public function __construct(IConfig $config, ProviderMapper $providerMapper, SessionMapper $sessionMapper, TrustedInstanceMapper $trustedInstanceMapper, /*GroupsService $groupsService*/) {
-		$this->config = $config;
+	public function __construct(ProviderMapper $providerMapper, SessionMapper $sessionMapper, TrustedInstanceMapper $trustedInstanceMapper, IAppContainer $appContainer) {
 		$this->providerMapper = $providerMapper;
 		$this->sessionMapper = $sessionMapper;
 		$this->trustedInstanceMapper = $trustedInstanceMapper;
-		//$this->groupsService = $groupsService;
+		$this->appContainer = $appContainer;
 	}
-
 
 	public function getProvidersWithSettings(): array {
 		$trustedInstanceMapper = $this->trustedInstanceMapper;
@@ -94,27 +89,31 @@ class ProviderService {
 		return $this->trustedInstanceMapper->findAll($providerId);
 	}
 
-	public function getProviderSession(string $uid, int $providerId) : Session {
-		$deletedSession = $this->sessionMapper->findSessionByProviderId($uid, $providerId);
-
-		return $deletedSession;
+	public function getProviderSession(string $uid, int $providerId): ?Session {
+		try {
+			return $this->sessionMapper->findSessionByProviderId($uid, $providerId);
+		} catch (DoesNotExistException $e) {
+			return null;
+		}		
 	}
 
-	public function deleteProvider(int $providerId) : Provider {
+	public function deleteProvider(int $providerId): Provider {
 		$provider = $this->getProvider($providerId);
 		$this->providerMapper->delete($provider);
 		$this->trustedInstanceMapper->deleteAll($providerId);
 		$this->sessionMapper->deleteAllSessions($providerId);
 
-		//$this->groupsService->removeAllProviderMemberships($provider);
+		$groupsService = $this->appContainer->get(GroupsService::class);
+		$groupsService->removeAllProviderMemberships($provider);
 
 		return $provider;
 	}
 
-	public function deleteProviderSession(string $uid, int $providerId) : Session {
+	public function deleteProviderSession(string $uid, int $providerId): Session {
 		$deletedSession = $this->sessionMapper->deleteSession($uid, $providerId);
 
-		//$this->groupsService->removeAllSessionMemberships($deletedSession);
+		$groupsService = $this->appContainer->get(GroupsService::class);
+		$groupsService->removeAllSessionMemberships($deletedSession);
 
 		return $deletedSession;
 	}

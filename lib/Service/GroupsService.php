@@ -103,7 +103,7 @@ class GroupsService {
 		$provider = $this->providerService->getProvider($providerId);
 		$session = $this->providerService->getProviderSession($userId, $providerId);
 
-		$displaynameAttribute = $provider->getDisplaynameAttribute() ?? 'name';
+		$displaynameAttribute = $provider->getDisplayNameClaim() ?? 'name';
 		$groupsAttribute = $provider->getGroupsClaim() ?? 'groups';
 
 		$session = $this->refreshAccessToken($session);

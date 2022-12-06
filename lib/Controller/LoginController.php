@@ -154,7 +154,7 @@ class LoginController extends Controller {
 		$this->logger->debug('Initiating login for provider with id: ' . $providerId);
 
 		//TODO: handle exceptions
-		$provider = $this->providerMapper->getProvider($providerId);
+		$provider = $this->providerService->getProvider($providerId);
 
 		$state = $this->random->generate(32, ISecureRandom::CHAR_DIGITS . ISecureRandom::CHAR_UPPER);
 		$this->session->set(self::STATE, $state);
@@ -268,7 +268,7 @@ class LoginController extends Controller {
 		}
 
 		$providerId = (int)$this->session->get(self::PROVIDERID);
-		$provider = $this->providerMapper->getProvider($providerId);
+		$provider = $this->providerService->getProvider($providerId);
 
 		$clientId = $provider->getClientId();
 		$clientSecret = $provider->getClientSecret();
@@ -341,7 +341,7 @@ class LoginController extends Controller {
 			return new JSONResponse(['Failed to load user']);
 		}
 
-		$displaynameAttribute = $provider->getDisplaynameAttribute() ?? 'name';
+		$displaynameAttribute = $provider->getDisplayNameClaim() ?? 'name';
 		$displayname = $idTokenPayload->{$displaynameAttribute} ?? $userId;
 
 		$this->sessionMapper->createOrUpdateSession($this->userId, $providerId, $idTokenRaw, $userId, $idTokenPayload->exp, $accessToken, 0, $refreshToken, 0, $displayname);

@@ -4,8 +4,8 @@
 			<a class="icon icon-vo" />
 			{{ t('vo_federation', 'VO Federation') }}
 		</h2>
-		<div v-for="provider in state" :key="provider.clientId" class="vo-content">
-			<div v-if="!provider.displayName">
+		<div v-for="provider in state" :key="provider.providerId" class="vo-content">
+			<div v-if="!provider.active">
 				<button id="aai-oidc" @click="() => onOAuthClick(provider.providerId)">
 					<span class="icon icon-external" />
 					{{ t('vo_federation', 'Connect with {name}', { name: provider.identifier }) }}
@@ -71,7 +71,7 @@ export default {
 					showSuccess(t('vo_federation', 'Logged out successfully'))
 					const providerIndex = this.state.findIndex(provider => provider.providerId === providerId)
 					if (providerIndex > -1) {
-						this.state[providerIndex].displayName = ''
+						this.state[providerIndex].active = false
 					}
 				})
 				.catch((error) => {

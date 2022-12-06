@@ -7,9 +7,8 @@ use JsonSerializable;
 use OCP\AppFramework\Db\Entity;
 
 class Session extends Entity implements JsonSerializable {
-	protected $providerId;
 	protected $uid;
-	protected $instanceUrl;
+	protected $providerId;
 	protected $idToken;
 	protected $idTokenSub;
 	protected $idTokenExp;
@@ -20,7 +19,9 @@ class Session extends Entity implements JsonSerializable {
 	protected $userinfoDisplayName;
 	protected $lastSync;
 
-
+	public function __construct() {
+		$this->addType('lastSync', 'datetime');
+	}
 
 	public function jsonSerialize(): array {
 		return [

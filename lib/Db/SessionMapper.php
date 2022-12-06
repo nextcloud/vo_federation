@@ -81,7 +81,7 @@ class SessionMapper extends QBMapper {
 				throw new DoesNotExistException('Session must be created. Missing required parameters.');
 			}
 			$session->setUid($uid);
-			$session->setProviderId($uid);
+			$session->setProviderId($providerId);
 			$session->setIdToken($idToken);
 			$session->setIdTokenSub($idTokenSub);
 			$session->setIdTokenExp($idTokenExp);
