@@ -41,6 +41,8 @@ use OC\Share20\Exception\InvalidShare;
 use OC\Share20\Share;
 use OCA\VO_Federation\Backend\GroupBackend;
 use OCA\VO_Federation\Service\ProviderService;
+use OCA\VO_Federation\BackgroundJob\RetryJob;
+use OCP\BackgroundJob\IJobList;
 use OCP\Constants;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\Federation\ICloudFederationProviderManager;
@@ -56,6 +58,7 @@ use OCP\ILogger;
 use OCP\IUserManager;
 use OCP\Share\Exceptions\GenericShareException;
 use OCP\Share\Exceptions\ShareNotFound;
+use OCP\Share\IManager;
 use OCP\Share\IShare;
 use OCP\Share\IShareProvider;
 
@@ -65,7 +68,6 @@ use OCP\Share\IShareProvider;
  * @package OCA\FederatedFileSharing
  */
 class FederatedGroupShareProvider implements IShareProvider {
-	public const SHARE_TYPE_REMOTE = 6;
 
 	/** @var IDBConnection */
 	private $dbConnection;
@@ -113,6 +115,11 @@ class FederatedGroupShareProvider implements IShareProvider {
 	
 	private ProviderService $providerService;
 
+	private IManager $shareManager;
+
+	/** @var IJobList  */
+	private $jobList;	
+
 	/**
 	 * DefaultShareProvider constructor.
 	 *
@@ -143,7 +150,9 @@ class FederatedGroupShareProvider implements IShareProvider {
 			\OCP\GlobalScale\IConfig $globalScaleConfig,
 			ICloudFederationProviderManager $cloudFederationProviderManager,
 			GroupBackend $groupBackend,
-			ProviderService $providerService
+			ProviderService $providerService,
+			IManager $shareManager,
+			IJobList $jobList
 	) {
 		$this->dbConnection = $connection;
 		$this->addressHandler = $addressHandler;
@@ -159,6 +168,8 @@ class FederatedGroupShareProvider implements IShareProvider {
 		$this->cloudFederationProviderManager = $cloudFederationProviderManager;
 		$this->groupBackend = $groupBackend;
 		$this->providerService = $providerService;
+		$this->shareManager = $shareManager;
+		$this->jobList = $jobList;
 	}
 
 	/**
@@ -202,103 +213,129 @@ class FederatedGroupShareProvider implements IShareProvider {
 			$message = 'Cannot find Community AAI for Group Id';
 			throw new \Exception($message);
 		}
-		
+
 		$trustedInstances = $this->providerService->getProviderTrustedInstances($providerId);
 		if (empty($trustedInstances)) {
 			$message = 'No trusted instances configured for Community AAI';
 			throw new \Exception($message);
+		}		
+
+		try {
+			$remoteShare = $this->getShareFromExternalShareTable($share);
+		} catch (ShareNotFound $e) {
+			$remoteShare = null;
 		}
 
-		$firstShareId = null;
+		if ($remoteShare) {
+			$message = 'Re-sharing is not supported';
+			throw new \Exception($message);
+		}
+
+		// if ($remoteShare) {
+		// 	try {
+		// 		$ownerCloudId = $this->cloudIdManager->getCloudId($remoteShare['owner'], $remoteShare['remote']);
+		// 		$shareId = $this->addShareToDB($itemSource, $itemType, $shareWith, $sharedBy, $ownerCloudId->getId(), $permissions, 'tmp_token_' . time(), $shareType, $expirationDate);
+		// 		$share->setId($shareId);
+		// 		[$token, $remoteId] = $this->askOwnerToReShare($shareWith, $share, $shareId);
+		// 		// remote share was create successfully if we get a valid token as return
+		// 		$send = is_string($token) && $token !== '';
+		// 	} catch (\Exception $e) {
+		// 		// fall back to old re-share behavior if the remote server
+		// 		// doesn't support flat re-shares (was introduced with Nextcloud 9.1)
+		// 		$this->removeShareFromTable($share);
+		// 		$shareId = $this->createFederatedShare($share);
+		// 	}
+		// 	if ($send) {
+		// 		$this->updateSuccessfulReshare($shareId, $token);
+		// 		$this->storeRemoteId($shareId, $remoteId);
+		// 	} else {
+		// 		$this->removeShareFromTable($share);
+		// 		$message_t = $this->l->t('File is already shared with %s', [$shareWith]);
+		// 		throw new \Exception($message_t);
+		// 	}
+		// } else {
+		// 	$shareId = $this->createFederatedShare($share);
+		// }		
+
+		$share->setShareType(IShare::TYPE_GROUP);
+		$localGroupShare = $this->shareManager->createShare($share);
+		$share->setShareType($shareType);
+
+
 		foreach ($trustedInstances as $trustedInstance) {
 			$currentShareWith = $shareWith . '@' . $trustedInstance->getInstanceUrl();
-
-			/*
-			* Check if file is not already shared with the remote user
-			*/
-			$alreadyShared = $this->getSharedWith($currentShareWith, IShare::TYPE_FEDERATED_GROUP, $share->getNode(), 1, 0);
-			if (!empty($alreadyShared)) {
-				$message = 'Sharing %1$s failed, because this item is already shared with %2$s';
-				$message_t = $this->l->t('Sharing %1$s failed, because this item is already shared with user %2$s', [$share->getNode()->getName(), $shareWith]);
-				$this->logger->debug(sprintf($message, $share->getNode()->getName(), $currentShareWith), ['app' => 'Federated File Sharing']);
-				throw new \Exception($message_t);
-			}
-
-			// don't allow federated shares if source and target server are the same
+			
 			$cloudId = $this->cloudIdManager->resolveCloudId($currentShareWith, false);
-			$currentServer = $this->addressHandler->generateRemoteURL();
-			$currentUser = $sharedBy;
-			if ($this->addressHandler->compareAddresses($cloudId->getUser(), $cloudId->getRemote(), $currentUser, $currentServer)) {
-				$message = 'Not allowed to create a federated share with the same user.';
-				$message_t = $this->l->t('Not allowed to create a federated share with the same user');
-				$this->logger->debug($message, ['app' => 'Federated File Sharing']);
-				throw new \Exception($message_t);
-			}
-
-			// Federated shares always have read permissions
-			if (($share->getPermissions() & Constants::PERMISSION_READ) === 0) {
-				$message = 'Federated shares require read permissions';
-				$message_t = $this->l->t('Federated shares require read permissions');
-				$this->logger->debug($message, ['app' => 'Federated File Sharing']);
-				throw new \Exception($message_t);
-			}
-
 			$share->setSharedWith($cloudId->getId());
 
-			try {
-				$remoteShare = $this->getShareFromExternalShareTable($share);
-			} catch (ShareNotFound $e) {
-				$remoteShare = null;
-			}
+			$data = [
+				'share_type' => $share->getShareType(),
+				'item_type' => $share->getNodeType(),
+				'item_source' => $share->getNodeId(),
+				'file_source' => $share->getNodeId(),
+				'share_with' => $share->getSharedWith(),
+				'uid_owner' => $share->getShareOwner(),
+				'uid_initiator' => $share->getSharedBy(),
+				'permissions' => $share->getPermissions(),
+				'expiration' => $share->getExpirationDate() !== null ? \date_format($share->getExpirationDate(), 'Y-m-d H:i:s') : null,
+				'parent' => $localGroupShare->getId(),
+			];
 
-			if ($remoteShare) {
-				$message = 'Re-sharing is not supported';
-				throw new \Exception($message);
-			}
-
-			// if ($remoteShare) {
-			// 	try {
-			// 		$ownerCloudId = $this->cloudIdManager->getCloudId($remoteShare['owner'], $remoteShare['remote']);
-			// 		$shareId = $this->addShareToDB($itemSource, $itemType, $shareWith, $sharedBy, $ownerCloudId->getId(), $permissions, 'tmp_token_' . time(), $shareType, $expirationDate);
-			// 		$share->setId($shareId);
-			// 		[$token, $remoteId] = $this->askOwnerToReShare($shareWith, $share, $shareId);
-			// 		// remote share was create successfully if we get a valid token as return
-			// 		$send = is_string($token) && $token !== '';
-			// 	} catch (\Exception $e) {
-			// 		// fall back to old re-share behavior if the remote server
-			// 		// doesn't support flat re-shares (was introduced with Nextcloud 9.1)
-			// 		$this->removeShareFromTable($share);
-			// 		$shareId = $this->createFederatedShare($share);
-			// 	}
-			// 	if ($send) {
-			// 		$this->updateSuccessfulReshare($shareId, $token);
-			// 		$this->storeRemoteId($shareId, $remoteId);
-			// 	} else {
-			// 		$this->removeShareFromTable($share);
-			// 		$message_t = $this->l->t('File is already shared with %s', [$shareWith]);
-			// 		throw new \Exception($message_t);
-			// 	}
-			// } else {
-			// 	$shareId = $this->createFederatedShare($share);
-			// }
-
-			$currentShareId = $this->createFederatedShare($share);
-			$firstShareId = is_null($firstShareId) ? $currentShareId : $firstShareId;
+			$this->jobList->add(RetryJob::class,
+				array_merge($data, [
+					'try' => 0,
+					'lastRun' => time()
+				])
+			);
 		}
 
-		$data = $this->getRawShare($firstShareId);
-		return $this->createShareObject($data);
+		return $localGroupShare;
 	}
 
+	// TODO: Fix visibility
 	/**
 	 * create federated share and inform the recipient
 	 *
 	 * @param IShare $share
+	 * @param int $parentShareId local group share id
 	 * @return int
 	 * @throws ShareNotFound
 	 * @throws \Exception
 	 */
-	protected function createFederatedShare(IShare $share) {
+	public function createFederatedShare(IShare $share, int $parentShareId) {
+		$shareWith = $share->getSharedWith();
+		$sharedBy = $share->getSharedBy();
+
+		/*
+		* Check if file is not already shared with the remote user
+		*/
+		$alreadyShared = $this->getSharedWith($shareWith, IShare::TYPE_FEDERATED_GROUP, $share->getNode(), 1, 0);
+		if (!empty($alreadyShared)) {
+			$message = 'Sharing %1$s failed, because this item is already shared with %2$s';
+			$message_t = $this->l->t('Sharing %1$s failed, because this item is already shared with user %2$s', [$share->getNode()->getName(), $shareWith]);
+			$this->logger->debug(sprintf($message, $share->getNode()->getName(), $shareWith), ['app' => 'Federated File Sharing']);
+			throw new \Exception($message_t);
+		}
+
+		// don't allow federated shares if source and target server are the same
+		$cloudId = $this->cloudIdManager->resolveCloudId($shareWith, false);
+		$currentServer = $this->addressHandler->generateRemoteURL();
+		$currentUser = $sharedBy;
+		if ($this->addressHandler->compareAddresses($cloudId->getUser(), $cloudId->getRemote(), $currentUser, $currentServer)) {
+			$message = 'Not allowed to create a federated share with the same user.';
+			$message_t = $this->l->t('Not allowed to create a federated share with the same user');
+			$this->logger->debug($message, ['app' => 'Federated File Sharing']);
+			throw new \Exception($message_t);
+		}
+
+		// Federated shares always have read permissions
+		if (($share->getPermissions() & Constants::PERMISSION_READ) === 0) {
+			$message = 'Federated shares require read permissions';
+			$message_t = $this->l->t('Federated shares require read permissions');
+			$this->logger->debug($message, ['app' => 'Federated File Sharing']);
+			throw new \Exception($message_t);
+		}
+					
 		$token = $this->tokenHandler->generateToken();
 		$shareId = $this->addShareToDB(
 			$share->getNodeId(),
@@ -673,6 +710,7 @@ class FederatedGroupShareProvider implements IShareProvider {
 
 
 	public function getSharesInFolder($userId, Folder $node, $reshares, $shallow = true) {
+		// TODO: IShare::TYPE_REMOTE
 		$qb = $this->dbConnection->getQueryBuilder();
 		$qb->select('*')
 			->from('share', 's')
@@ -924,6 +962,7 @@ class FederatedGroupShareProvider implements IShareProvider {
 		return $data;
 	}
 
+	// TODO: Fix visibility
 	/**
 	 * Create a share object from an database row
 	 *
@@ -932,7 +971,7 @@ class FederatedGroupShareProvider implements IShareProvider {
 	 * @throws InvalidShare
 	 * @throws ShareNotFound
 	 */
-	private function createShareObject($data) {
+	public function createShareObject($data) {
 		$share = new Share($this->rootFolder, $this->userManager);
 		$share->setId((int)$data['id'])
 			->setShareType((int)$data['share_type'])
@@ -1132,6 +1171,7 @@ class FederatedGroupShareProvider implements IShareProvider {
 			$ids[] = $node->getId();
 		}
 
+		// TODO: IShare::TYPE_REMOTE
 		$qb = $this->dbConnection->getQueryBuilder();
 		$qb->select('share_with', 'token', 'file_source')
 			->from('share')
@@ -1168,10 +1208,7 @@ class FederatedGroupShareProvider implements IShareProvider {
 		$qb->select('*')
 			->from('share')
 			->where(
-				$qb->expr()->orX(
-					$qb->expr()->eq('share_type', $qb->createNamedParameter(\OCP\Share\IShare::TYPE_REMOTE)),
-					$qb->expr()->eq('share_type', $qb->createNamedParameter(\OCP\Share\IShare::TYPE_REMOTE_GROUP))
-				)
+				$qb->expr()->eq('share_type', $qb->createNamedParameter(\OCP\Share\IShare::TYPE_FEDERATED_GROUP))
 			);
 
 		$cursor = $qb->execute();
