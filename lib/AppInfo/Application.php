@@ -98,7 +98,5 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
-		Util::addScript(Application::APP_ID, Application::APP_ID . '-adminSettings');
-
 	}
 }
