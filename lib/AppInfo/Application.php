@@ -16,6 +16,7 @@ use OCA\VO_Federation\FederatedGroupShareProvider;
 use OCA\VO_Federation\OCM\CloudGroupFederationProviderFiles;
 use OCA\VO_Federation\Service\GroupsService;
 use OCA\VO_Federation\Service\ProviderService;
+use OCA\VO_Federation\Listeners\LoadAdditionalScriptsListener;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\AppFramework\Bootstrap\IBootContext;
@@ -27,6 +28,8 @@ use OCP\IConfig;
 use OCP\IGroupManager;
 use OCP\Share\IManager;
 use OCP\User\Events\UserLoggedInEvent;
+use OCA\Files\Event\LoadAdditionalScriptsEvent;
+		
 
 /**
  * Class Application
@@ -47,6 +50,7 @@ class Application extends App implements IBootstrap {
 	public function register(IRegistrationContext $context): void {
 		// Register the composer autoloader for packages shipped by this app, if applicable
 		//include_once __DIR__ . '/../../vendor/autoload.php';
+		$context->registerEventListener(LoadAdditionalScriptsEvent::class, LoadAdditionalScriptsListener::class);
 	}
 
 	public function boot(IBootContext $context): void {
@@ -93,5 +97,8 @@ class Application extends App implements IBootstrap {
 				}
 			);
 		});
+
+		Util::addScript(Application::APP_ID, Application::APP_ID . '-adminSettings');
+
 	}
 }
