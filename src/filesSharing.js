@@ -1,4 +1,4 @@
 import './bootstrap'
-import VOSharingList from './components/VOSharingList.vue'
+import ShareeList from './components/ShareeList.vue'
 
-OCA.Sharing.ShareTabSections.registerSection((parentRef, fileInfo) => VOSharingList)
+OCA.Sharing.ShareTabSections.registerSection((parentRef, fileInfo) => ShareeList)

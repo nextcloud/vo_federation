@@ -22,10 +22,12 @@
 
 <template>
 	<ul class="vo-sharing-sharee-list">
-		<li class="vo-sharing-entry" v-for="sharee in sharees" style="display: flex; flex-direction: column; margin: 6px 0;">
-      <span>{{ sharee.displayName }}</span>
-      <span>{{ sharee.shareWithDescription }}</span>
-    </li>
+		<ShareeEntry v-for="(sharee, idx) in shareesWithShare"
+			:key="`sharee-${idx}`"
+			:is-shared="sharee.isShared"
+			:sharee="sharee"
+			:file-info="fileInfo"
+			@sync:shares="syncShares" />
 	</ul>
 </template>
 
@@ -33,10 +35,16 @@
 import { generateOcsUrl } from '@nextcloud/router'
 import axios from '@nextcloud/axios'
 
+import ShareeEntry from './ShareeEntry.vue'
+
 const SHARE_TYPE_FEDERATED_GROUP = 14
 
 export default {
-	name: 'VOSharingList',
+	name: 'ShareeList',
+
+	components: {
+		ShareeEntry,
+	},
 
 	props: {
 		fileInfo: {
@@ -48,31 +56,41 @@ export default {
 
 	data() {
 		return {
-			loading: false,
 			sharees: [],
 		}
 	},
 
-	computed: {},
+	computed: {
+		shares() {
+			return this.$parent.shares
+		},
+		shareesWithShare() {
+			return this.sharees.map(sharee => {
+				const share = this.shares.find(share => {
+					return share.shareWith === sharee.shareWith
+				})
+				if (share) {
+					return Object.assign({ isShared: true, shareId: share.id }, sharee)
+				}
+				return Object.assign({ isShared: false, shareId: null }, sharee)
+			})
+		},
+	},
 
-  created() {
-		this.getSuggestions()
-  },
+	created() {
+		this.getShareesSuggestions()
+	},
 
 	methods: {
 
 		/**
-		 * Get suggestions
+		 * Get sharee suggestions
 		 *
 		 * @param {string} search the search query
 		 * @param {boolean} [lookup=false] search on lookup server
 		 */
-		async getSuggestions(search = '', lookup = false) {
+		async getShareesSuggestions() {
 			this.loading = true
-
-			if (OC.getCapabilities().files_sharing.sharee.query_lookup_default === true) {
-				lookup = true
-			}
 
 			let request = null
 			try {
@@ -80,14 +98,14 @@ export default {
 					params: {
 						format: 'json',
 						itemType: this.fileInfo.type === 'dir' ? 'folder' : 'file',
-						search,
-						lookup,
+						search: '',
+						lookup: false,
 						perPage: this.getMaxAutocompleteResults(),
 						shareType: [SHARE_TYPE_FEDERATED_GROUP],
 					},
 				})
 			} catch (error) {
-				console.error('Error fetching suggestions', error)
+				console.error('Error fetching sharee suggestions', error)
 				return
 			}
 
@@ -154,25 +172,25 @@ export default {
 			}
 		},
 
-    filterOutExistingShares(shares) {
+		filterOutExistingShares(shares) {
 			return shares.reduce((arr, share) => {
 				// only check proper objects
 				if (typeof share !== 'object') {
 					return arr
 				}
-        arr.push(share)
+				arr.push(share)
 				return arr
 			}, [])
-    },
+		},
 
-    getMaxAutocompleteResults() {
-      return parseInt(OC.config['sharing.maxAutocompleteResults'], 10) || 25
-    }
+		getMaxAutocompleteResults() {
+			return parseInt(OC.config['sharing.maxAutocompleteResults'], 10) || 25
+		},
+
+		syncShares() {
+			this.$parent.getShares()
+		},
 
 	},
 }
 </script>
-
-<style scoped>
-
-</style>
