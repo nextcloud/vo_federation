@@ -17,6 +17,9 @@ use OCA\VO_Federation\OCM\CloudGroupFederationProviderFiles;
 use OCA\VO_Federation\Service\GroupsService;
 use OCA\VO_Federation\Service\ProviderService;
 use OCA\VO_Federation\Listeners\LoadAdditionalScriptsListener;
+use OCA\VO_Federation\Middleware\ShareAPIMiddleware;
+use OCA\VO_Federation\Middleware\ShareAPIMiddleware2;
+use OCA\VO_Federation\Db\ShareMapper;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\AppFramework\Bootstrap\IBootContext;
@@ -29,6 +32,7 @@ use OCP\IGroupManager;
 use OCP\Share\IManager;
 use OCP\User\Events\UserLoggedInEvent;
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
+use OC\AppFramework\Middleware\MiddlewareDispatcher;
 		
 
 /**
@@ -44,12 +48,13 @@ class Application extends App implements IBootstrap {
 	 * @param array $urlParams
 	 */
 	public function __construct(array $urlParams = []) {
-		parent::__construct(self::APP_ID, $urlParams);
+		parent::__construct(self::APP_ID, $urlParams);	
 	}
 
 	public function register(IRegistrationContext $context): void {
 		// Register the composer autoloader for packages shipped by this app, if applicable
 		//include_once __DIR__ . '/../../vendor/autoload.php';
+		
 		$context->registerEventListener(LoadAdditionalScriptsEvent::class, LoadAdditionalScriptsListener::class);
 	}
 
@@ -97,6 +102,8 @@ class Application extends App implements IBootstrap {
 				}
 			);
 		});
-
+		
+		$filesSharingAppContainer = \OC::$server->getRegisteredAppContainer('files_sharing');
+		$filesSharingAppContainer->registerMiddleWare(ShareAPIMiddleware::class);
 	}
 }

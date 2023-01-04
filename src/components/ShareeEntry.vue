@@ -13,8 +13,8 @@
 		<template #actions>
 			<ActionButton :disabled="loading" @click.prevent="actionCheck">
 				<template #icon>
-					<CheckboxMarkedIcon v-if="isShared" />
-					<CheckboxBlankOutlineIcon v-else />
+					<CheckboxMarkedIcon v-if="isShared" :size="20" />
+					<CheckboxBlankOutlineIcon v-else :size="20" />
 				</template>
 			</ActionButton>
 		</template>

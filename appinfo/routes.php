@@ -15,5 +15,6 @@ return [
 		['name' => 'settings#logoutProvider', 'url' => '/provider/{providerId}/logout', 'verb' => 'POST'],
 		['name' => 'login#login', 'url' => '/login/{providerId}', 'verb' => 'GET'],
 		['name' => 'login#code', 'url' => '/code', 'verb' => 'GET'],
-	]
+		//['name' => 'share#sharees', 'url' => '/sharees', 'verb' => 'GET'],
+		]
 ];

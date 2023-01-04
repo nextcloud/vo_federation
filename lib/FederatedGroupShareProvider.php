@@ -42,6 +42,8 @@ use OC\Share20\Share;
 use OCA\VO_Federation\Backend\GroupBackend;
 use OCA\VO_Federation\Service\ProviderService;
 use OCA\VO_Federation\BackgroundJob\RetryJob;
+use OCA\VO_Federation\Db\ShareMapper as VOShareMapper;
+use OCA\VO_Federation\Db\Share as VOShare;
 use OCP\BackgroundJob\IJobList;
 use OCP\Constants;
 use OCP\DB\QueryBuilder\IQueryBuilder;
@@ -120,6 +122,8 @@ class FederatedGroupShareProvider implements IShareProvider {
 	/** @var IJobList  */
 	private $jobList;	
 
+	private VOShareMapper $voShareMapper;
+
 	/**
 	 * DefaultShareProvider constructor.
 	 *
@@ -152,7 +156,8 @@ class FederatedGroupShareProvider implements IShareProvider {
 			GroupBackend $groupBackend,
 			ProviderService $providerService,
 			IManager $shareManager,
-			IJobList $jobList
+			IJobList $jobList,
+			VOShareMapper $voShareMapper
 	) {
 		$this->dbConnection = $connection;
 		$this->addressHandler = $addressHandler;
@@ -170,6 +175,7 @@ class FederatedGroupShareProvider implements IShareProvider {
 		$this->providerService = $providerService;
 		$this->shareManager = $shareManager;
 		$this->jobList = $jobList;
+		$this->voShareMapper = $voShareMapper;
 	}
 
 	/**
@@ -191,12 +197,8 @@ class FederatedGroupShareProvider implements IShareProvider {
 	 */
 	public function create(IShare $share) {
 		$shareWith = $share->getSharedWith();
-		$itemSource = $share->getNodeId();
-		$itemType = $share->getNodeType();
-		$permissions = $share->getPermissions();
-		$sharedBy = $share->getSharedBy();
 		$shareType = $share->getShareType();
-		$expirationDate = $share->getExpirationDate();
+		$sharedBy = $share->getSharedBy();
 
 		if ($shareType === IShare::TYPE_FEDERATED_GROUP &&
 			!$this->isOutgoingServer2serverGroupShareEnabled()
@@ -213,12 +215,6 @@ class FederatedGroupShareProvider implements IShareProvider {
 			$message = 'Cannot find Community AAI for Group Id';
 			throw new \Exception($message);
 		}
-
-		$trustedInstances = $this->providerService->getProviderTrustedInstances($providerId);
-		if (empty($trustedInstances)) {
-			$message = 'No trusted instances configured for Community AAI';
-			throw new \Exception($message);
-		}		
 
 		try {
 			$remoteShare = $this->getShareFromExternalShareTable($share);
@@ -257,54 +253,50 @@ class FederatedGroupShareProvider implements IShareProvider {
 		// 	$shareId = $this->createFederatedShare($share);
 		// }		
 
-		$share->setShareType(IShare::TYPE_GROUP);
-		$localGroupShare = $this->shareManager->createShare($share);
-		$share->setShareType($shareType);
+		$shareId = $this->createFederatedShare($share);
 
-
+		$trustedInstances = $this->providerService->getProviderTrustedInstances($providerId);		
 		foreach ($trustedInstances as $trustedInstance) {
-			$currentShareWith = $shareWith . '@' . $trustedInstance->getInstanceUrl();
-			
-			$cloudId = $this->cloudIdManager->resolveCloudId($currentShareWith, false);
-			$share->setSharedWith($cloudId->getId());
+			$rawCloudId = $shareWith . '@' . $trustedInstance->getInstanceUrl();			
+			$cloudId = $this->cloudIdManager->resolveCloudId($rawCloudId, false);
 
-			$data = [
-				'share_type' => $share->getShareType(),
-				'item_type' => $share->getNodeType(),
-				'item_source' => $share->getNodeId(),
-				'file_source' => $share->getNodeId(),
-				'share_with' => $share->getSharedWith(),
-				'uid_owner' => $share->getShareOwner(),
-				'uid_initiator' => $share->getSharedBy(),
-				'permissions' => $share->getPermissions(),
-				'expiration' => $share->getExpirationDate() !== null ? \date_format($share->getExpirationDate(), 'Y-m-d H:i:s') : null,
-				'parent' => $localGroupShare->getId(),
-			];
+			// don't allow federated shares if source and target server are the same
+			$currentServer = $this->addressHandler->generateRemoteURL();
+			$currentUser = $sharedBy;
+			if ($this->addressHandler->compareAddresses($cloudId->getUser(), $cloudId->getRemote(), $currentUser, $currentServer)) {
+				$message = 'Not allowed to create a federated share with the same user.';
+				$message_t = $this->l->t('Not allowed to create a federated share with the same user');
+				$this->logger->debug($message, ['app' => 'Federated File Sharing']);
+				//throw new \Exception($message_t);
+				continue;
+			}
 
-			$this->jobList->add(RetryJob::class,
-				array_merge($data, [
-					'try' => 0,
-					'lastRun' => time()
-				])
-			);
-		}
+			$token = $this->tokenHandler->generateToken();
 
-		return $localGroupShare;
+			$voShare = new VOShare();
+			$voShare->setFederatedGroupShareId($shareId);
+			$voShare->setInstanceId($trustedInstance->getId());
+			$voShare->setCloudId($cloudId->getId());
+			$voShare->setToken($token);
+			$voShare->setNotification('share');
+			$voShare = $this->voShareMapper->insert($voShare);
+		}		
+
+		$data = $this->getRawShare($shareId);
+		return $this->createShareObject($data);
 	}
 
 	// TODO: Fix visibility
 	/**
 	 * create federated share and inform the recipient
 	 *
-	 * @param IShare $share
-	 * @param int $parentShareId local group share id
+	 * @param Share $share
 	 * @return int
 	 * @throws ShareNotFound
 	 * @throws \Exception
 	 */
-	public function createFederatedShare(IShare $share, int $parentShareId) {
-		$shareWith = $share->getSharedWith();
-		$sharedBy = $share->getSharedBy();
+	public function createFederatedShare(Share $share) {
+		$shareWith = $share->getSharedWith();		
 
 		/*
 		* Check if file is not already shared with the remote user
@@ -317,17 +309,6 @@ class FederatedGroupShareProvider implements IShareProvider {
 			throw new \Exception($message_t);
 		}
 
-		// don't allow federated shares if source and target server are the same
-		$cloudId = $this->cloudIdManager->resolveCloudId($shareWith, false);
-		$currentServer = $this->addressHandler->generateRemoteURL();
-		$currentUser = $sharedBy;
-		if ($this->addressHandler->compareAddresses($cloudId->getUser(), $cloudId->getRemote(), $currentUser, $currentServer)) {
-			$message = 'Not allowed to create a federated share with the same user.';
-			$message_t = $this->l->t('Not allowed to create a federated share with the same user');
-			$this->logger->debug($message, ['app' => 'Federated File Sharing']);
-			throw new \Exception($message_t);
-		}
-
 		// Federated shares always have read permissions
 		if (($share->getPermissions() & Constants::PERMISSION_READ) === 0) {
 			$message = 'Federated shares require read permissions';
@@ -335,7 +316,12 @@ class FederatedGroupShareProvider implements IShareProvider {
 			$this->logger->debug($message, ['app' => 'Federated File Sharing']);
 			throw new \Exception($message_t);
 		}
-					
+
+		$previousShareType = $share->getShareType();
+		$share->setShareType(IShare::TYPE_GROUP);
+		$localGroupShare = $this->shareManager->createShare($share);
+		$share->setShareType($previousShareType);
+
 		$token = $this->tokenHandler->generateToken();
 		$shareId = $this->addShareToDB(
 			$share->getNodeId(),
@@ -346,48 +332,9 @@ class FederatedGroupShareProvider implements IShareProvider {
 			$share->getPermissions(),
 			$token,
 			$share->getShareType(),
-			$share->getExpirationDate()
-		);
-
-		$failure = false;
-
-		try {
-			$sharedByFederatedId = $share->getSharedBy();
-			if ($this->userManager->userExists($sharedByFederatedId)) {
-				$cloudId = $this->cloudIdManager->getCloudId($sharedByFederatedId, $this->addressHandler->generateRemoteURL());
-				$sharedByFederatedId = $cloudId->getId();
-			}
-			$ownerCloudId = $this->cloudIdManager->getCloudId($share->getShareOwner(), $this->addressHandler->generateRemoteURL());
-			$send = $this->notifications->sendRemoteShare(
-				$token,
-				$share->getSharedWith(),
-				$share->getNode()->getName(),
-				$shareId,
-				$share->getShareOwner(),
-				$ownerCloudId->getId(),
-				$share->getSharedBy(),
-				$sharedByFederatedId,
-				$share->getShareType()
-			);
-
-			if ($send === false) {
-				$failure = true;
-			}
-		} catch (\Exception $e) {
-			$this->logger->logException($e, [
-				'message' => 'Failed to notify remote server of federated share, removing share.',
-				'level' => ILogger::ERROR,
-				'app' => 'federatedfilesharing',
-			]);
-			$failure = true;
-		}
-
-		if ($failure) {
-			$this->removeShareFromTableById($shareId);
-			$message_t = $this->l->t('Sharing %1$s failed, could not find %2$s, maybe the server is currently unreachable or uses a self-signed certificate.',
-				[$share->getNode()->getName(), $share->getSharedWith()]);
-			throw new \Exception($message_t);
-		}
+			$share->getExpirationDate(),
+			(int) $localGroupShare->getId()
+		);		
 
 		return $shareId;
 	}
@@ -455,7 +402,7 @@ class FederatedGroupShareProvider implements IShareProvider {
 	 * @param \DateTime $expirationDate
 	 * @return int
 	 */
-	private function addShareToDB($itemSource, $itemType, $shareWith, $sharedBy, $uidOwner, $permissions, $token, $shareType, $expirationDate) {
+	private function addShareToDB($itemSource, $itemType, $shareWith, $sharedBy, $uidOwner, $permissions, $token, $shareType, $expirationDate, $parentId) {
 		$qb = $this->dbConnection->getQueryBuilder();
 		$qb->insert('share')
 			->setValue('share_type', $qb->createNamedParameter($shareType))
@@ -468,7 +415,8 @@ class FederatedGroupShareProvider implements IShareProvider {
 			->setValue('permissions', $qb->createNamedParameter($permissions))
 			->setValue('expiration', $qb->createNamedParameter($expirationDate, IQueryBuilder::PARAM_DATE))
 			->setValue('token', $qb->createNamedParameter($token))
-			->setValue('stime', $qb->createNamedParameter(time()));
+			->setValue('stime', $qb->createNamedParameter(time()))
+			->setValue('parent', $qb->createNamedParameter($parentId));
 
 		/*
 		 * Added to fix https://github.com/owncloud/core/issues/22215
@@ -624,6 +572,7 @@ class FederatedGroupShareProvider implements IShareProvider {
 	 * @throws \OCP\HintException
 	 */
 	public function delete(IShare $share) {
+/*		
 		[, $remote] = $this->addressHandler->splitUserRemote($share->getSharedWith());
 
 		// if the local user is the owner we can send the unShare request directly...
@@ -638,7 +587,32 @@ class FederatedGroupShareProvider implements IShareProvider {
 
 		// only remove the share when all messages are send to not lose information
 		// about the share to early
+*/
+		$localGroupShareId = $this->getLocalGroupShareId($share);
+		$localGroupShare = $this->shareManager->getShareById('ocinternal:' . $localGroupShareId);
+		if ($localGroupShare) {
+			$this->shareManager->deleteShare($localGroupShare);
+		}
+
+		$voShares = $this->voShareMapper->findAll($share->getId());
+		foreach ($voShares as $voShare) {
+			if ($this->userManager->userExists($share->getShareOwner())) {
+				$voShare->setNotification('unshare');
+				$voShare->setTry(0);
+				$this->voShareMapper->update($voShare);	
+			}
+		}
 		$this->removeShareFromTable($share);
+	}
+
+	private function getLocalGroupShareId(IShare $share): int {
+		$qb = $this->dbConnection->getQueryBuilder();
+		$qb->from('share')->select('parent')
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($share->getId())));
+		$cursor = $qb->execute();
+		$row = $cursor->fetch();
+		$cursor->closeCursor();
+		return $row['parent'];
 	}
 
 	/**
@@ -915,10 +889,11 @@ class FederatedGroupShareProvider implements IShareProvider {
 	public function getShareByToken($token) {
 		$qb = $this->dbConnection->getQueryBuilder();
 
-		$cursor = $qb->select('*')
-			->from('share')
+		$cursor = $qb->select('s.*')
+			->from('share', 's')
+			->innerJoin('s', 'vo_shares', 'vos', $qb->expr()->eq('s.id', 'vos.federated_group_share_id'))
 			->where($qb->expr()->in('share_type', $qb->createNamedParameter($this->supportedShareType, IQueryBuilder::PARAM_INT_ARRAY)))
-			->andWhere($qb->expr()->eq('token', $qb->createNamedParameter($token)))
+			->andWhere($qb->expr()->eq('vos.token', $qb->createNamedParameter($token)))
 			->execute();
 
 		$data = $cursor->fetch();
