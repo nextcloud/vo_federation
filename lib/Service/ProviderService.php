@@ -26,6 +26,8 @@ declare(strict_types=1);
 
 namespace OCA\VO_Federation\Service;
 
+use OCA\VO_Federation\AppInfo\Application;
+use OCA\VO_Federation\Avatar\NamedAvatar;
 use OCA\VO_Federation\Db\Provider;
 use OCA\VO_Federation\Db\ProviderMapper;
 use OCA\VO_Federation\Db\Session;
@@ -34,6 +36,13 @@ use OCA\VO_Federation\Db\TrustedInstance;
 use OCA\VO_Federation\Db\TrustedInstanceMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\IAppContainer;
+use OCP\Files\IAppData;
+use OCP\Files\NotFoundException;
+use OCP\IAvatar;
+use OCP\IConfig;
+use OCP\IL10N;
+use OCP\IURLGenerator;
+use Psr\Log\LoggerInterface;
 
 class ProviderService {
 	public const SETTING_AUTHORIZATION_ENDPOINT = 'authorizationEndpoint';
@@ -53,22 +62,47 @@ class ProviderService {
 	/** @var IAppContainer */
 	private $appContainer;
 
-	public function __construct(ProviderMapper $providerMapper, SessionMapper $sessionMapper, TrustedInstanceMapper $trustedInstanceMapper, IAppContainer $appContainer) {
+	private IConfig $config;
+	private IL10N $l;
+	private LoggerInterface $logger;
+	private IAppData $appData;
+	private IURLGenerator $urlGenerator;
+
+	public function __construct(IConfig $config,
+								IL10N $l10n,
+								LoggerInterface $logger,
+								IAppData $appData,
+								ProviderMapper $providerMapper,
+								SessionMapper $sessionMapper,
+								TrustedInstanceMapper $trustedInstanceMapper,
+								IAppContainer $appContainer,
+								IURLGenerator $urlGenerator) {
+		$this->config = $config;
+		$this->l = $l10n;
+		$this->logger = $logger;
+		$this->appData = $appData;
 		$this->providerMapper = $providerMapper;
 		$this->sessionMapper = $sessionMapper;
 		$this->trustedInstanceMapper = $trustedInstanceMapper;
 		$this->appContainer = $appContainer;
+		$this->urlGenerator = $urlGenerator;
 	}
 
 	public function getProvidersWithSettings(): array {
 		$trustedInstanceMapper = $this->trustedInstanceMapper;
 		$providers = $this->providerMapper->getProviders();
 		return array_map(function ($provider) use ($trustedInstanceMapper) {
-			$trustedInstances = $trustedInstanceMapper->findAll($provider->getId());
+			$providerId = $provider->getId();
+			$trustedInstances = $trustedInstanceMapper->findAll($providerId);
 			$provider = $provider->jsonSerialize();
 			$provider['trustedInstances'] = array_map(function ($trustedInstance) {
 				return $trustedInstance->getInstanceUrl();
 			}, $trustedInstances);
+
+			$avatar = $this->getAvatar($providerId);
+			if (!is_null($avatar) && $avatar->exists()) {
+				$provider['avatarUrl'] = $this->urlGenerator->linkToRouteAbsolute(Application::APP_ID . '.avatar.getAvatar', ['providerId' => $providerId, 'size' => 32]);
+			}			
 			return $provider;
 		}, $providers);
 	}
@@ -152,5 +186,25 @@ class ProviderService {
 			self::SETTING_USERINFO_ENDPOINT,
 			self::SETTING_EXTRA_CLAIMS,
 		];
+	}
+
+	public function getAvatar(int $providerId): ?IAvatar {
+		try {
+			$providerFolder = $this->appData->getFolder('provider');
+		} catch (NotFoundException $e) {
+			$providerFolder = $this->appData->newFolder('provider');
+		}
+		try {
+			$folder = $providerFolder->getFolder((string) $providerId);
+		} catch (NotFoundException $e) {
+			$folder = $providerFolder->newFolder((string) $providerId);
+		}
+	
+		try {
+			$provider = $this->providerMapper->getProvider($providerId);
+			return new NamedAvatar($folder, $this->l, $provider->getIdentifier(), $this->logger, $this->config);	
+		} catch (\Exception $e) {
+			return null;
+		}
 	}
 }

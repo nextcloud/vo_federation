@@ -39,6 +39,7 @@ namespace OCA\VO_Federation;
 
 use OC\Share20\Exception\InvalidShare;
 use OC\Share20\Share;
+use OCA\VO_Federation\AppInfo\Application;
 use OCA\VO_Federation\Backend\GroupBackend;
 use OCA\VO_Federation\Service\ProviderService;
 use OCA\VO_Federation\BackgroundJob\RetryJob;
@@ -57,6 +58,7 @@ use OCP\IConfig;
 use OCP\IDBConnection;
 use OCP\IL10N;
 use OCP\ILogger;
+use OCP\IURLGenerator;
 use OCP\IUserManager;
 use OCP\Share\Exceptions\GenericShareException;
 use OCP\Share\Exceptions\ShareNotFound;
@@ -123,6 +125,7 @@ class FederatedGroupShareProvider implements IShareProvider {
 	private $jobList;	
 
 	private VOShareMapper $voShareMapper;
+	private IURLGenerator $urlGenerator;
 
 	/**
 	 * DefaultShareProvider constructor.
@@ -157,7 +160,8 @@ class FederatedGroupShareProvider implements IShareProvider {
 			ProviderService $providerService,
 			IManager $shareManager,
 			IJobList $jobList,
-			VOShareMapper $voShareMapper
+			VOShareMapper $voShareMapper,
+			IURLGenerator $urlGenerator
 	) {
 		$this->dbConnection = $connection;
 		$this->addressHandler = $addressHandler;
@@ -176,6 +180,7 @@ class FederatedGroupShareProvider implements IShareProvider {
 		$this->shareManager = $shareManager;
 		$this->jobList = $jobList;
 		$this->voShareMapper = $voShareMapper;
+		$this->urlGenerator = $urlGenerator;
 	}
 
 	/**
@@ -960,6 +965,9 @@ class FederatedGroupShareProvider implements IShareProvider {
 		$share->setShareTime($shareTime);
 		$share->setSharedWith($data['share_with']);
 
+		$displayName = $this->addressHandler->getGroupDisplayName($data['share_with']);
+		$share->setSharedWithDisplayName($displayName);
+
 		if ($data['uid_initiator'] !== null) {
 			$share->setShareOwner($data['uid_owner']);
 			$share->setSharedBy($data['uid_initiator']);
@@ -980,6 +988,14 @@ class FederatedGroupShareProvider implements IShareProvider {
 		if ($data['expiration'] !== null) {
 			$expiration = \DateTime::createFromFormat('Y-m-d H:i:s', $data['expiration']);
 			$share->setExpirationDate($expiration);
+		}
+
+
+		$providerId = $this->groupBackend->getProviderId($data['share_with']);
+		$avatar = $this->providerService->getAvatar($providerId);
+		if (!is_null($avatar) && $avatar->exists()) {
+			$avatarUrl = $this->urlGenerator->linkToRouteAbsolute(Application::APP_ID . '.avatar.getAvatar', ['providerId' => $providerId, 'size' => 32]);
+			$share->setSharedWithAvatar($avatarUrl);
 		}
 
 		return $share;

@@ -62,6 +62,11 @@
 					<h3 style="font-weight: bold">
 						{{ t('vo_federation', 'OIDC settings') }}
 					</h3>
+					<AvatarSection v-if="isUpdating"
+						:avatar-display-name="editProvider.identifier"
+						:provider-id="editProvider.id"
+						:initial-avatar-url="editProvider.avatarUrl"
+						@update-url="(url) => updateProviderUrl(editProvider.id, url)" />
 					<p>
 						<label for="oidc-client-id">{{ t('vo_federation', 'Name') }}</label>
 						<input id="oidc-client-identifier"
@@ -213,6 +218,8 @@ import ActionButton from '@nextcloud/vue/dist/Components/ActionButton'
 import ListItem from '@nextcloud/vue/dist/Components/ListItem'
 import Modal from '@nextcloud/vue/dist/Components/Modal'
 
+import AvatarSection from './AvatarSection'
+
 const provider = {
 	id: null,
 	identifier: '',
@@ -241,6 +248,7 @@ export default {
 		ActionButton,
 		Modal,
 		ListItem,
+		AvatarSection,
 	},
 	data() {
 		return {
@@ -306,6 +314,13 @@ export default {
 				this.editProvider = { ...this.providers[providerIndex] }
 			}
 		},
+		updateProviderUrl(providerId, url) {
+			const providerIndex = this.providers.findIndex(provider => provider.id === providerId)
+			if (providerIndex > -1) {
+				this.$set(this.providers[providerIndex], 'avatarUrl', url)
+			}
+		},
+
 		addNewProvider() {
 			this.editProvider = JSON.parse(JSON.stringify(provider))
 		},

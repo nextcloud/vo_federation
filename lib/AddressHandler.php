@@ -25,8 +25,11 @@
  */
 namespace OCA\VO_Federation;
 
+use OCA\VO_Federation\Backend\GroupBackend;
+use OCA\VO_Federation\Service\ProviderService;
 use OCP\Federation\ICloudIdManager;
 use OCP\HintException;
+use OCP\IGroupManager;
 use OCP\IL10N;
 use OCP\IURLGenerator;
 
@@ -46,6 +49,15 @@ class AddressHandler {
 	/** @var ICloudIdManager */
 	private $cloudIdManager;
 
+	/** @var GroupBackend */
+	private $voGroupBackend;
+
+	/** @var ProviderService */
+	private $providerService;
+
+	/** @var IGroupManager */
+	private $groupManager;
+
 	/**
 	 * AddressHandler constructor.
 	 *
@@ -56,11 +68,17 @@ class AddressHandler {
 	public function __construct(
 		IURLGenerator $urlGenerator,
 		IL10N $il10n,
-		ICloudIdManager $cloudIdManager
+		ICloudIdManager $cloudIdManager,
+		GroupBackend $voGroupBackend,
+		ProviderService $providerService,
+		IGroupManager $groupManager
 	) {
 		$this->l = $il10n;
 		$this->urlGenerator = $urlGenerator;
 		$this->cloudIdManager = $cloudIdManager;
+		$this->voGroupBackend = $voGroupBackend;
+		$this->providerService = $providerService;
+		$this->groupManager = $groupManager;
 	}
 
 	/**
@@ -152,5 +170,19 @@ class AddressHandler {
 		}
 
 		return false;
+	}
+
+	public function getShareWithDescription($gid) : string {
+		$providerId = $this->voGroupBackend->getProviderId($gid);
+		$provider = $this->providerService->getProvider($providerId);
+		return $provider->getIdentifier();
+	}
+
+	public function getGroupDisplayName($gid) {
+		$group = $this->groupManager->get($gid);
+		if ($group) {
+			return $group->getDisplayName();
+		}
+		return $gid;
 	}
 }

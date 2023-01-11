@@ -37,6 +37,9 @@ class ShareAPIHelper {
 
 	public function formatShare(IShare $share): array {
 		$result = [];
+		if ($share->getSharedWithAvatar()) {
+			$result['share_with_avatar'] = $share->getSharedWithAvatar();
+		}
 		return $result;
 	}
 

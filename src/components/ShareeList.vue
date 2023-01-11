@@ -67,7 +67,7 @@ export default {
 		shareesWithShare() {
 			return this.sharees.map(sharee => {
 				const share = this.shares.find(share => {
-					return share.shareWith === sharee.shareWith
+					return share.shareWith === sharee.shareWith && share.type === SHARE_TYPE_FEDERATED_GROUP
 				})
 				if (share) {
 					return Object.assign({ isShared: true, shareId: share.id }, sharee)
@@ -169,6 +169,7 @@ export default {
 				server: result.value.server,
 				shareWithDisplayNameUnique: result.shareWithDisplayNameUnique || '',
 				shareWithDescription: result.shareWithDescription,
+				shareWithAvatar: result.shareWithAvatar,
 			}
 		},
 

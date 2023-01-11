@@ -16,5 +16,11 @@ return [
 		['name' => 'login#login', 'url' => '/login/{providerId}', 'verb' => 'GET'],
 		['name' => 'login#code', 'url' => '/code', 'verb' => 'GET'],
 		//['name' => 'share#sharees', 'url' => '/sharees', 'verb' => 'GET'],
+		['name' => 'avatar#getAvatarDark', 'url' => '/avatar/{providerId}/{size}/dark', 'verb' => 'GET'],
+		['name' => 'avatar#getAvatar', 'url' => '/avatar/{providerId}/{size}', 'verb' => 'GET'],
+		['name' => 'avatar#deleteAvatar', 'url' => '/avatar/{providerId}', 'verb' => 'DELETE'],
+		['name' => 'avatar#postCroppedAvatar', 'url' => '/avatar/{providerId}/cropped', 'verb' => 'POST'],
+		['name' => 'avatar#getTmpAvatar', 'url' => '/avatar/tmp', 'verb' => 'GET'],
+		['name' => 'avatar#postAvatar', 'url' => '/avatar/{providerId}', 'verb' => 'POST'],
 		]
 ];

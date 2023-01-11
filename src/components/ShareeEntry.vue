@@ -5,7 +5,7 @@
 		counter-type="highlighted"
 		force-display-actions>
 		<template #icon>
-			<Avatar :size="32" :display-name="sharee.shareWithDescription" />
+			<Avatar :size="32" :display-name="sharee.shareWithDescription" :url="sharee.shareWithAvatar ? sharee.shareWithAvatar : undefined" />
 		</template>
 		<template #subtitle>
 			{{ sharee.shareWithDescription }}

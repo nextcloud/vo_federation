@@ -34,6 +34,7 @@ use OCP\Group\Backend\IAddToGroupBackend;
 use OCP\Group\Backend\IRemoveFromGroupBackend;
 use OCP\Group\Backend\INamedBackend;
 use OCP\Group\Backend\IFederationGroupBackend;
+use OCP\Group\Backend\IHideFromCollaborationBackend;
 use OCP\IDBConnection;
 use OCP\ILogger;
 
@@ -47,7 +48,8 @@ class GroupBackend extends ABackend implements
 	IAddToGroupBackend,
 	IRemoveFromGroupBackend,
 	INamedBackend,
-	IFederationGroupBackend {
+	IFederationGroupBackend,
+	IHideFromCollaborationBackend {
 
 	/**
 	 * @var string The application name.
@@ -71,6 +73,11 @@ class GroupBackend extends ABackend implements
 		$this->logger = $logger;
 		$this->dbConn = $dbConn;
 		$this->providerService = $providerService;
+	}
+
+	public function hideGroup(string $groupId): bool {
+		// Hide local group from collaboration
+		return true;
 	}
 
 	private function fixDI() {

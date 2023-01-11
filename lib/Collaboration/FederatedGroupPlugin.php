@@ -28,6 +28,7 @@
  */
 namespace OCA\VO_Federation\Collaboration;
 
+use OCA\VO_Federation\AppInfo\Application;
 use OCP\Collaboration\Collaborators\ISearchPlugin;
 use OCP\Collaboration\Collaborators\ISearchResult;
 use OCP\Collaboration\Collaborators\SearchResultType;
@@ -38,8 +39,11 @@ use OCP\IUserSession;
 use OCP\Share\IShare;
 use OCA\VO_Federation\Backend\GroupBackend;
 use OCA\VO_Federation\Service\ProviderService;
+use OCP\IURLGenerator;
 
 class FederatedGroupPlugin implements ISearchPlugin {
+	/** @var bool */
+	protected $hideFromCollaboration;
 	/** @var bool */
 	protected $shareeEnumeration;
 	/** @var bool */
@@ -60,13 +64,17 @@ class FederatedGroupPlugin implements ISearchPlugin {
 	/** @var ProviderService */
 	private $providerService;
 
-	public function __construct(IConfig $config, IGroupManager $groupManager, IUserSession $userSession, GroupBackend $voGroupBackend, ProviderService $providerService) {
+	private IURLGenerator $urlGenerator;
+
+	public function __construct(IConfig $config, IGroupManager $groupManager, IUserSession $userSession, GroupBackend $voGroupBackend, ProviderService $providerService, IURLGenerator $urlGenerator) {
 		$this->groupManager = $groupManager;
 		$this->config = $config;
 		$this->userSession = $userSession;
 		$this->voGroupBackend = $voGroupBackend;
 		$this->providerService = $providerService;
+		$this->urlGenerator = $urlGenerator;
 
+		$this->hideFromCollaboration = $this->config->getAppValue('vo_federation', 'hide_from_collaboration', 'no') === 'yes';
 		$this->shareeEnumeration = $this->config->getAppValue('core', 'shareapi_allow_share_dialog_user_enumeration', 'yes') === 'yes';
 		$this->shareWithGroupOnly = $this->config->getAppValue('core', 'shareapi_only_share_with_group_members', 'no') === 'yes';
 		$this->shareeEnumerationInGroupOnly = $this->shareeEnumeration && $this->config->getAppValue('core', 'shareapi_restrict_user_enumeration_to_group', 'no') === 'yes';
@@ -112,7 +120,7 @@ class FederatedGroupPlugin implements ISearchPlugin {
 
 		$lowerSearch = strtolower($search);
 		foreach ($groups as $group) {
-			if ($group->hideFromCollaboration()) {
+			if ($this->hideFromCollaboration && $group->hideFromCollaboration()) {
 				continue;
 			}
 
@@ -128,7 +136,8 @@ class FederatedGroupPlugin implements ISearchPlugin {
 						'shareType' => IShare::TYPE_FEDERATED_GROUP,
 						'shareWith' => $gid
 					],
-					'shareWithDescription' => $this->getShareWithDescription($gid)
+					'shareWithDescription' => $this->getShareWithDescription($gid),
+					'shareWithAvatar' => $this->getShareWithAvatarUrl($gid),					
 				];
 			} else {
 				if ($this->shareeEnumerationInGroupOnly && !in_array($group->getGID(), $userGroups, true)) {
@@ -140,7 +149,8 @@ class FederatedGroupPlugin implements ISearchPlugin {
 						'shareType' => IShare::TYPE_FEDERATED_GROUP,
 						'shareWith' => $gid
 					],
-					'shareWithDescription' => $this->getShareWithDescription($gid)
+					'shareWithDescription' => $this->getShareWithDescription($gid),
+					'shareWithAvatar' => $this->getShareWithAvatarUrl($gid)
 				];
 			}
 		}
@@ -156,7 +166,8 @@ class FederatedGroupPlugin implements ISearchPlugin {
 						'shareType' => IShare::TYPE_FEDERATED_GROUP,
 						'shareWith' => $group->getGID()
 					],
-					'shareWithDescription' => $this->getShareWithDescription($group->getGID())
+					'shareWithDescription' => $this->getShareWithDescription($group->getGID()),
+					'shareWithAvatar' => $this->getShareWithAvatarUrl($group->getGID())					
 				];
 			}
 		}
@@ -176,4 +187,13 @@ class FederatedGroupPlugin implements ISearchPlugin {
 		$provider = $this->providerService->getProvider($providerId);
 		return $provider->getIdentifier();
 	}
+
+	private function getShareWithAvatarUrl($gid) : ?string {
+		$providerId = $this->voGroupBackend->getProviderId($gid);
+		$avatar = $this->providerService->getAvatar($providerId);
+		if (!is_null($avatar) && $avatar->exists()) {
+			return $this->urlGenerator->linkToRouteAbsolute(Application::APP_ID . '.avatar.getAvatar', ['providerId' => $providerId, 'size' => 32]);
+		}
+		return null;
+	}	
 }
