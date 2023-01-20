@@ -121,8 +121,44 @@ class OCMNotificationJob extends TimedJob {
 					);
 				} else if ($notification_action === 'unshare') {
 					[, $remote] = $this->addressHandler->splitUserRemote($voShare->getCloudId());
-					$send = $this->notifications->sendRemoteUnShare($remote, $shareId, $token);
-					// $this->revokeShare($share, true);
+
+					if ($voShare->getInstanceId() !== -1) {
+						$send = $this->notifications->sendRemoteUnShare($remote, $shareId, $token);
+						//$this->revokeShare($share, true);
+					} else { // ... if not we need to correct ID for the unShare request
+						$remoteId = $this->shareProvider->getRemoteIdInt($shareId);
+						$send = $this->notifications->sendRemoteUnShare($remote, $remoteId, $token);
+						//$this->revokeShare($share, false);
+					}
+				} else if ($notification_action === 'reshare') {
+					$share = $this->shareProvider->getShareById($shareId);
+					$remoteShare = $this->shareProvider->getShareFromExternalShareTable($share);
+					$token = $remoteShare['share_token'];
+					$remoteId = $remoteShare['remote_id'];
+					$remote = $remoteShare['remote'];
+
+					[$token, $remoteId] = $this->notifications->requestReShare(
+						// the token for the original external share
+						$token,
+						$remoteId,
+						$shareId,
+						$remote,
+						$share->getSharedBy(),
+						$voShare->getCloudId(),
+						$share->getPermissions(),
+						$share->getNode()->getName()
+					);
+
+					// remote share was create successfully if we get a valid token as return
+					$send = is_string($token) && $token !== '';
+					if ($send) {
+						$voShare->setToken($token);
+						$this->shareProvider->storeRemoteId($shareId, $remoteId);
+					} else {
+						// TODO: Other reasons
+						$message_t = $this->l->t('File is already shared with %s', [$voShare->getCloudId()]);
+						throw new \Exception($message_t);
+					}
 				}
 
 				if ($send === false) {
@@ -130,7 +166,7 @@ class OCMNotificationJob extends TimedJob {
 					$message_t = $this->l->t('Sharing %1$s failed, could not find %2$s, maybe the server is currently unreachable or uses a self-signed certificate.',
 						[$share->getNode()->getName(), $share->getSharedWith()]);
 					throw new \Exception($message_t);
-				}					
+				}
 
 				$voShare->setNotification(null);
 			} catch (\Exception $e) {
@@ -145,5 +181,4 @@ class OCMNotificationJob extends TimedJob {
 			}
 		}
 	}
-
 }

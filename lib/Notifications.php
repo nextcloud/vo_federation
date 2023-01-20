@@ -159,52 +159,21 @@ class Notifications {
 	 * @throws \OCP\HintException
 	 * @throws \OC\ServerNotAvailableException
 	 */
-	public function requestReShare($token, $id, $shareId, $remote, $shareWith, $permission, $filename) {
-		$fields = [
+	public function requestReShare($token, $id, $shareId, $remote, $sharedBy, $shareWith, $permission, $filename) {
+		$ocmFields = [
+			'sharedBy' => $sharedBy,
 			'shareWith' => $shareWith,
 			'token' => $token,
 			'permission' => $permission,
-			'remoteId' => $shareId,
+			'remoteId' => (string)$id,
+			'localId' => $shareId,
+			'name' => $filename,
+			'shareType' => 'federated_group'
 		];
-
-		$ocmFields = $fields;
-		$ocmFields['remoteId'] = (string)$id;
-		$ocmFields['localId'] = $shareId;
-		$ocmFields['name'] = $filename;
 
 		$ocmResult = $this->tryOCMEndPoint($remote, $ocmFields, 'reshare');
 		if (is_array($ocmResult) && isset($ocmResult['token']) && isset($ocmResult['providerId'])) {
 			return [$ocmResult['token'], $ocmResult['providerId']];
-		}
-
-		$result = $this->tryLegacyEndPoint(rtrim($remote, '/'), '/' . $id . '/reshare', $fields);
-		$status = json_decode($result['result'], true);
-
-		$httpRequestSuccessful = $result['success'];
-		$ocsCallSuccessful = $status['ocs']['meta']['statuscode'] === 100 || $status['ocs']['meta']['statuscode'] === 200;
-		$validToken = isset($status['ocs']['data']['token']) && is_string($status['ocs']['data']['token']);
-		$validRemoteId = isset($status['ocs']['data']['remoteId']);
-
-		if ($httpRequestSuccessful && $ocsCallSuccessful && $validToken && $validRemoteId) {
-			return [
-				$status['ocs']['data']['token'],
-				$status['ocs']['data']['remoteId']
-			];
-		} elseif (!$validToken) {
-			$this->logger->info(
-				"invalid or missing token requesting re-share for $filename to $remote",
-				['app' => 'federatedfilesharing']
-			);
-		} elseif (!$validRemoteId) {
-			$this->logger->info(
-				"missing remote id requesting re-share for $filename to $remote",
-				['app' => 'federatedfilesharing']
-			);
-		} else {
-			$this->logger->info(
-				"failed requesting re-share for $filename to $remote",
-				['app' => 'federatedfilesharing']
-			);
 		}
 
 		return false;
@@ -369,33 +338,10 @@ class Notifications {
 	 * @throws \Exception
 	 */
 	protected function tryLegacyEndPoint($remoteDomain, $urlSuffix, array $fields) {
-		$result = [
+		return [
 			'success' => false,
 			'result' => '',
 		];
-
-		// Fall back to old API
-		$client = $this->httpClientService->newClient();
-		$federationEndpoints = $this->discoveryService->discover($remoteDomain, 'FEDERATED_SHARING');
-		$endpoint = isset($federationEndpoints['share']) ? $federationEndpoints['share'] : '/ocs/v2.php/cloud/shares';
-		try {
-			$response = $client->post($remoteDomain . $endpoint . $urlSuffix . '?format=' . self::RESPONSE_FORMAT, [
-				'body' => $fields,
-				'timeout' => 10,
-				'connect_timeout' => 10,
-			]);
-			$result['result'] = $response->getBody();
-			$result['success'] = true;
-		} catch (\Exception $e) {
-			// if flat re-sharing is not supported by the remote server
-			// we re-throw the exception and fall back to the old behaviour.
-			// (flat re-shares has been introduced in Nextcloud 9.1)
-			if ($e->getCode() === Http::STATUS_INTERNAL_SERVER_ERROR) {
-				throw $e;
-			}
-		}
-
-		return $result;
 	}
 
 	/**
@@ -425,6 +371,7 @@ class Notifications {
 				);
 				return $this->federationProviderManager->sendShare($share);
 			case 'reshare':
+				$local = $this->addressHandler->generateRemoteURL();
 				// ask owner to reshare a file
 				$notification = $this->cloudFederationFactory->getCloudFederationNotification();
 				$notification->setMessage('REQUEST_RESHARE',
@@ -432,6 +379,7 @@ class Notifications {
 					$fields['remoteId'],
 					[
 						'sharedSecret' => $fields['token'],
+						'sharedBy' => $fields['sharedBy'] . '@' . $local,
 						'shareWith' => $fields['shareWith'],
 						'senderId' => $fields['localId'],
 						'shareType' => $fields['shareType'],

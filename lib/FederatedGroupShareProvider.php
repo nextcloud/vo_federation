@@ -47,6 +47,7 @@ use OCA\VO_Federation\Db\ShareMapper as VOShareMapper;
 use OCA\VO_Federation\Db\Share as VOShare;
 use OCP\BackgroundJob\IJobList;
 use OCP\Constants;
+use OCP\DB\Exception as DBException;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\Federation\ICloudFederationProviderManager;
 use OCP\Federation\ICloudIdManager;
@@ -228,37 +229,14 @@ class FederatedGroupShareProvider implements IShareProvider {
 		}
 
 		if ($remoteShare) {
-			$message = 'Re-sharing is not supported';
-			throw new \Exception($message);
+			$ownerCloudId = $this->cloudIdManager->getCloudId($remoteShare['owner'], $remoteShare['remote']);		
+			$share->setShareOwner($ownerCloudId->getId());
 		}
 
-		// if ($remoteShare) {
-		// 	try {
-		// 		$ownerCloudId = $this->cloudIdManager->getCloudId($remoteShare['owner'], $remoteShare['remote']);
-		// 		$shareId = $this->addShareToDB($itemSource, $itemType, $shareWith, $sharedBy, $ownerCloudId->getId(), $permissions, 'tmp_token_' . time(), $shareType, $expirationDate);
-		// 		$share->setId($shareId);
-		// 		[$token, $remoteId] = $this->askOwnerToReShare($shareWith, $share, $shareId);
-		// 		// remote share was create successfully if we get a valid token as return
-		// 		$send = is_string($token) && $token !== '';
-		// 	} catch (\Exception $e) {
-		// 		// fall back to old re-share behavior if the remote server
-		// 		// doesn't support flat re-shares (was introduced with Nextcloud 9.1)
-		// 		$this->removeShareFromTable($share);
-		// 		$shareId = $this->createFederatedShare($share);
-		// 	}
-		// 	if ($send) {
-		// 		$this->updateSuccessfulReshare($shareId, $token);
-		// 		$this->storeRemoteId($shareId, $remoteId);
-		// 	} else {
-		// 		$this->removeShareFromTable($share);
-		// 		$message_t = $this->l->t('File is already shared with %s', [$shareWith]);
-		// 		throw new \Exception($message_t);
-		// 	}
-		// } else {
-		// 	$shareId = $this->createFederatedShare($share);
-		// }		
-
-		$shareId = $this->createFederatedShare($share);
+		$share->setShareType(IShare::TYPE_GROUP);
+		$localGroupShare = $this->shareManager->createShare($share);
+		$share->setShareType($shareType);
+		$shareId = $this->createFederatedShare($share, (int) $localGroupShare->getId());
 
 		$trustedInstances = $this->providerService->getProviderTrustedInstances($providerId);		
 		foreach ($trustedInstances as $trustedInstance) {
@@ -276,14 +254,20 @@ class FederatedGroupShareProvider implements IShareProvider {
 				continue;
 			}
 
-			$token = $this->tokenHandler->generateToken();
-
 			$voShare = new VOShare();
 			$voShare->setFederatedGroupShareId($shareId);
 			$voShare->setInstanceId($trustedInstance->getId());
 			$voShare->setCloudId($cloudId->getId());
-			$voShare->setToken($token);
-			$voShare->setNotification('share');
+
+			if ($remoteShare) {
+				$voShare->setNotification('reshare');
+				$voShare->setToken('tmp_token_' . time());
+			} else {
+				$voShare->setNotification('share');
+				$token = $this->tokenHandler->generateToken();
+				$voShare->setToken($token);
+			}
+			
 			$voShare = $this->voShareMapper->insert($voShare);
 		}		
 
@@ -300,7 +284,7 @@ class FederatedGroupShareProvider implements IShareProvider {
 	 * @throws ShareNotFound
 	 * @throws \Exception
 	 */
-	public function createFederatedShare(Share $share) {
+	public function createFederatedShare(Share $share, int $parentId) {
 		$shareWith = $share->getSharedWith();		
 
 		/*
@@ -322,11 +306,6 @@ class FederatedGroupShareProvider implements IShareProvider {
 			throw new \Exception($message_t);
 		}
 
-		$previousShareType = $share->getShareType();
-		$share->setShareType(IShare::TYPE_GROUP);
-		$localGroupShare = $this->shareManager->createShare($share);
-		$share->setShareType($previousShareType);
-
 		$token = $this->tokenHandler->generateToken();
 		$shareId = $this->addShareToDB(
 			$share->getNodeId(),
@@ -338,38 +317,14 @@ class FederatedGroupShareProvider implements IShareProvider {
 			$token,
 			$share->getShareType(),
 			$share->getExpirationDate(),
-			(int) $localGroupShare->getId()
-		);		
+			$share->getTarget(),
+			$parentId
+		);	
 
 		return $shareId;
 	}
 
-	/**
-	 * @param string $shareWith
-	 * @param IShare $share
-	 * @param string $shareId internal share Id
-	 * @return array
-	 * @throws \Exception
-	 */
-	protected function askOwnerToReShare($shareWith, IShare $share, $shareId) {
-		$remoteShare = $this->getShareFromExternalShareTable($share);
-		$token = $remoteShare['share_token'];
-		$remoteId = $remoteShare['remote_id'];
-		$remote = $remoteShare['remote'];
-
-		[$token, $remoteId] = $this->notifications->requestReShare(
-			$token,
-			$remoteId,
-			$shareId,
-			$remote,
-			$shareWith,
-			$share->getPermissions(),
-			$share->getNode()->getName()
-		);
-
-		return [$token, $remoteId];
-	}
-
+	// TODO: Fix visibility
 	/**
 	 * get federated share from the share_external table but exclude mounted link shares
 	 *
@@ -377,7 +332,7 @@ class FederatedGroupShareProvider implements IShareProvider {
 	 * @return array
 	 * @throws ShareNotFound
 	 */
-	protected function getShareFromExternalShareTable(IShare $share) {
+	public function getShareFromExternalShareTable(IShare $share) {
 		$query = $this->dbConnection->getQueryBuilder();
 		$query->select('*')->from($this->externalShareTable)
 			->where($query->expr()->eq('user', $query->createNamedParameter($share->getShareOwner())))
@@ -407,7 +362,7 @@ class FederatedGroupShareProvider implements IShareProvider {
 	 * @param \DateTime $expirationDate
 	 * @return int
 	 */
-	private function addShareToDB($itemSource, $itemType, $shareWith, $sharedBy, $uidOwner, $permissions, $token, $shareType, $expirationDate, $parentId) {
+	private function addShareToDB($itemSource, $itemType, $shareWith, $sharedBy, $uidOwner, $permissions, $token, $shareType, $expirationDate, $target, $parentId) {
 		$qb = $this->dbConnection->getQueryBuilder();
 		$qb->insert('share')
 			->setValue('share_type', $qb->createNamedParameter($shareType))
@@ -420,14 +375,17 @@ class FederatedGroupShareProvider implements IShareProvider {
 			->setValue('permissions', $qb->createNamedParameter($permissions))
 			->setValue('expiration', $qb->createNamedParameter($expirationDate, IQueryBuilder::PARAM_DATE))
 			->setValue('token', $qb->createNamedParameter($token))
-			->setValue('stime', $qb->createNamedParameter(time()))
-			->setValue('parent', $qb->createNamedParameter($parentId));
+			->setValue('stime', $qb->createNamedParameter(time()));
 
 		/*
 		 * Added to fix https://github.com/owncloud/core/issues/22215
 		 * Can be removed once we get rid of ajax/share.php
 		 */
-		$qb->setValue('file_target', $qb->createNamedParameter(''));
+		$qb->setValue('file_target', $qb->createNamedParameter($target));
+
+		if ($parentId) {
+			$qb->setValue('parent', $qb->createNamedParameter($parentId));
+		}
 
 		$qb->execute();
 		return $qb->getLastInsertId();
@@ -478,37 +436,31 @@ class FederatedGroupShareProvider implements IShareProvider {
 		$this->notifications->sendPermissionChange($remote, $remoteId, $share->getToken(), $share->getPermissions());
 	}
 
-
-	/**
-	 * update successful reShare with the correct token
-	 *
-	 * @param int $shareId
-	 * @param string $token
-	 */
-	protected function updateSuccessfulReShare($shareId, $token) {
-		$query = $this->dbConnection->getQueryBuilder();
-		$query->update('share')
-			->where($query->expr()->eq('id', $query->createNamedParameter($shareId)))
-			->set('token', $query->createNamedParameter($token))
-			->execute();
-	}
-
 	/**
 	 * store remote ID in federated reShare table
 	 *
 	 * @param $shareId
 	 * @param $remoteId
 	 */
-	public function storeRemoteId(int $shareId, string $remoteId): void {
-		$query = $this->dbConnection->getQueryBuilder();
-		$query->insert('federated_reshares')
+	public function storeRemoteId(int $shareId, string $remoteId): void {		
+		try {
+			$query = $this->dbConnection->getQueryBuilder();
+			$query->insert('federated_reshares')
 			->values(
 				[
 					'share_id' => $query->createNamedParameter($shareId),
 					'remote_id' => $query->createNamedParameter($remoteId),
 				]
 			);
-		$query->execute();
+			$query->execute();
+		} catch (DBException $ex) {
+			if ($ex->getReason() === DBException::REASON_UNIQUE_CONSTRAINT_VIOLATION || 
+				$ex->getReason() === DBException::REASON_CONSTRAINT_VIOLATION) {
+				// Already added by other reshare instance
+				return;
+			}
+			throw $ex;
+		}
 	}
 
 	/**
@@ -532,6 +484,21 @@ class FederatedGroupShareProvider implements IShareProvider {
 
 		return (string)$data['remote_id'];
 	}
+
+	public function getRemoteIdInt(int $shareId): int {
+		$query = $this->dbConnection->getQueryBuilder();
+		$query->select('remote_id')->from('federated_reshares')
+			->where($query->expr()->eq('share_id', $query->createNamedParameter($shareId)));
+		$result = $query->execute();
+		$data = $result->fetch();
+		$result->closeCursor();
+
+		if (!is_array($data) || !isset($data['remote_id'])) {
+			throw new ShareNotFound();
+		}
+
+		return $data['remote_id'];
+	}	
 
 	/**
 	 * @inheritdoc
@@ -593,10 +560,15 @@ class FederatedGroupShareProvider implements IShareProvider {
 		// only remove the share when all messages are send to not lose information
 		// about the share to early
 */
-		$localGroupShareId = $this->getLocalGroupShareId($share);
-		$localGroupShare = $this->shareManager->getShareById('ocinternal:' . $localGroupShareId);
-		if ($localGroupShare) {
-			$this->shareManager->deleteShare($localGroupShare);
+		try {
+			$localGroupShareId = $this->getLocalGroupShareId($share);
+			$localGroupShare = $this->shareManager->getShareById('ocinternal:' . $localGroupShareId);
+			if ($localGroupShare) {
+				$this->shareManager->deleteShare($localGroupShare);
+			}	
+		} catch (\Exception $e) {
+			// Assume reshare on owner instance has no local group share			
+			// TODO logging
 		}
 
 		$voShares = $this->voShareMapper->findAll($share->getId());

@@ -34,6 +34,9 @@ use OCA\VO_Federation\AddressHandler;
 use OCA\VO_Federation\FederatedGroupShareProvider;
 use OCA\Files_Sharing\Activity\Providers\RemoteShares;
 use OCA\Files_Sharing\External\Manager;
+use OCA\VO_Federation\Db\ShareMapper as VOShareMapper;
+use OCA\VO_Federation\Db\Share as VOShare;
+use OCA\VO_Federation\TokenHandler;
 use OCP\Activity\IManager as IActivityManager;
 use OCP\App\IAppManager;
 use OCP\Constants;
@@ -57,6 +60,7 @@ use OCP\IUserManager;
 use OCP\Notification\IManager as INotificationManager;
 use OCP\Share\Exceptions\ShareNotFound;
 use OCP\Share\IManager;
+use OCP\Share\IProviderFactory;
 use OCP\Share\IShare;
 use OCP\Util;
 
@@ -110,6 +114,9 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 	/** @var Manager */
 	private $externalShareManager;
 
+	private VOShareMapper $voShareMapper;
+	private TokenHandler $tokenHandler;
+
 	/**
 	 * CloudFederationProvider constructor.
 	 *
@@ -146,7 +153,10 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 		IDBConnection $connection,
 		IGroupManager $groupManager,
 		IConfig $config,
-		Manager $externalShareManager
+		Manager $externalShareManager,
+		VOShareMapper $voShareMapper,
+		TokenHandler $tokenHandler,
+		//IProviderFactory $providerFactory
 	) {
 		$this->appManager = $appManager;
 		$this->federatedGroupShareProvider = $federatedGroupShareProvider;
@@ -164,9 +174,10 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 		$this->groupManager = $groupManager;
 		$this->config = $config;
 		$this->externalShareManager = $externalShareManager;
+		$this->voShareMapper = $voShareMapper;
+		$this->tokenHandler = $tokenHandler;
+		//$this->providerFactory = $providerFactory;
 	}
-
-
 
 	/**
 	 * @return string
@@ -247,6 +258,7 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 			// }
 
 			try {
+				//public function addShare($remote, $token, $password, $name, $owner, $shareType, $accepted = false, $user = null, $remoteId = '', $parent = -1) {
 				$this->externalShareManager->addShare($remote, $token, '', $name, $owner, $shareType, false, $shareWith, $remoteId);
 				$shareId = \OC::$server->getDatabaseConnection()->lastInsertId('*PREFIX*share_external');
 
@@ -634,13 +646,21 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 			throw new BadRequestException(['shareWith']);
 		}
 		$shareWith = $notification['shareWith'];
+		$sharedByFederatedId = $notification['sharedBy'];
 
 		if (!isset($notification['senderId'])) {
 			throw new BadRequestException(['senderId']);
 		}
 		$senderId = $notification['senderId'];
 
-		$share = $this->federatedGroupShareProvider->getShareById($id);
+		try {
+			$share = $this->federatedGroupShareProvider->getShareById($id);
+		} catch (ShareNotFound $ex) {
+			// Handle TYPE_REMOTE and TYPE_REMOTE_GROUP reshares
+			//$federatedShareProvider = $this->providerFactory->getProvider('ocFederatedSharing');
+			//$share = $federatedShareProvider->getShareById($id);
+			$share = $this->shareManager->getShareById("ocFederatedSharing:" . $id);
+		}		
 
 		// We have to respect the default share permissions
 		$permissions = $share->getPermissions() & (int)$this->config->getAppValue('core', 'shareapi_default_permissions', (string)Constants::PERMISSION_ALL);
@@ -663,11 +683,29 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 		// check if re-sharing is allowed
 		if ($share->getPermissions() & Constants::PERMISSION_SHARE) {
 			// the recipient of the initial share is now the initiator for the re-share
-			$share->setSharedBy($share->getSharedWith());
+			$share->setSharedBy($sharedByFederatedId);
 			$share->setSharedWith($shareWith);
-			$result = $this->federatedGroupShareProvider->create($share);
-			$this->federatedGroupShareProvider->storeRemoteId((int)$result->getId(), $senderId);
-			return ['token' => $result->getToken(), 'providerId' => $result->getId()];
+			$share->setShareType(IShare::TYPE_FEDERATED_GROUP);
+
+			$alreadyShared = $this->federatedGroupShareProvider->getSharedWith($shareWith, IShare::TYPE_FEDERATED_GROUP, $share->getNode(), 1, 0);
+			if (!empty($alreadyShared)) {
+				$reShareId = (int) $alreadyShared[0]->getId();
+			} else {
+				$reShareId = $this->federatedGroupShareProvider->createFederatedShare($share, -1);
+				$this->federatedGroupShareProvider->storeRemoteId($reShareId, $senderId);				
+			}
+
+			$voShare = new VOShare();
+			$voShare->setFederatedGroupShareId($reShareId);
+			$voShare->setInstanceId(-1);
+			$voShare->setCloudId($shareWith);
+			$voShare->setNotification('share');
+			$token = $this->tokenHandler->generateToken();
+			$voShare->setToken($token);
+			
+			$voShare = $this->voShareMapper->insert($voShare);
+
+			return ['token' => $token, 'providerId' => $reShareId];
 		} else {
 			throw new ProviderCouldNotAddShareException('resharing not allowed for share: ' . $id);
 		}
@@ -777,13 +815,10 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 	 */
 	protected function verifyShare(IShare $share, $token) {
 		if (
-			$share->getShareType() === IShare::TYPE_REMOTE &&
-			$share->getToken() === $token
+			$share->getShareType() === IShare::TYPE_FEDERATED_GROUP ||
+			$share->getShareType() === IShare::TYPE_REMOTE ||
+			$share->getShareType() === IShare::TYPE_REMOTE_GROUP
 		) {
-			return true;
-		}
-
-		if ($share->getShareType() === IShare::TYPE_CIRCLE) {
 			try {
 				$knownShare = $this->shareManager->getShareByToken($token);
 				if ($knownShare->getId() === $share->getId()) {
@@ -825,6 +860,6 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 	 * @since 14.0.0
 	 */
 	public function getSupportedShareTypes() {
-		return ['user', 'group'];
+		return ['federated_group'];
 	}
 }
