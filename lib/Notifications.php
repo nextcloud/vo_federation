@@ -168,7 +168,7 @@ class Notifications {
 			'remoteId' => (string)$id,
 			'localId' => $shareId,
 			'name' => $filename,
-			'shareType' => 'federated_group'
+			'shareType' => 'federation'
 		];
 
 		$ocmResult = $this->tryOCMEndPoint($remote, $ocmFields, 'reshare');

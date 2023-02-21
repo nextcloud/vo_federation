@@ -20,6 +20,7 @@ use OCA\VO_Federation\Listeners\LoadAdditionalScriptsListener;
 use OCA\VO_Federation\Middleware\ShareAPIMiddleware;
 use OCA\VO_Federation\Middleware\ShareAPIMiddleware2;
 use OCA\VO_Federation\Db\ShareMapper;
+use OCA\VO_Federation\Federation\CloudIdResolver;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\AppFramework\Bootstrap\IBootContext;
@@ -27,6 +28,7 @@ use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\IAppContainer;
 use OCP\Federation\ICloudFederationProviderManager;
+use OCP\Federation\ICloudIdManager;
 use OCP\IConfig;
 use OCP\IGroupManager;
 use OCP\Share\IManager;
@@ -64,15 +66,17 @@ class Application extends App implements IBootstrap {
 			GroupBackend $groupBackend,
 			IManager $shareManager,
 			ICloudFederationProviderManager $federationProviderManager,
+			ICloudIdManager $cloudIdManager,
+			CloudIdResolver $resolver,
 			IAppContainer $appContainer
 		) {
 			$groupManager->addBackend($groupBackend);
 			$shareManager->registerShareProvider(FederatedGroupShareProvider::class);
-			$federationProviderManager->addCloudFederationProviderForShareType('file-federated_group', 'file', ['federated_group'],
-				'Federated Files Sharing (federated_group)',
+			$federationProviderManager->addCloudFederationProvider('file', 'Federated Files Sharing (federated_group)',
 				function () use ($appContainer): CloudGroupFederationProviderFiles {
 					return $appContainer->get(CloudGroupFederationProviderFiles::class);
 				});
+			$cloudIdManager->registerCloudIdResolver($resolver);
 		});
 
 		$context->injectFn(function (EventDispatcher $dispatcher,

@@ -33,7 +33,6 @@ use OCP\Group\Backend\IDeleteGroupBackend;
 use OCP\Group\Backend\IAddToGroupBackend;
 use OCP\Group\Backend\IRemoveFromGroupBackend;
 use OCP\Group\Backend\INamedBackend;
-use OCP\Group\Backend\IFederationGroupBackend;
 use OCP\Group\Backend\IHideFromCollaborationBackend;
 use OCP\IDBConnection;
 use OCP\ILogger;
@@ -48,7 +47,6 @@ class GroupBackend extends ABackend implements
 	IAddToGroupBackend,
 	IRemoveFromGroupBackend,
 	INamedBackend,
-	IFederationGroupBackend,
 	IHideFromCollaborationBackend {
 
 	/**
@@ -452,9 +450,5 @@ class GroupBackend extends ABackend implements
 
 	public function getBackendName(): string {
 		return 'VO';
-	}
-
-	public function isFederatedGroup(string $groupId): bool {
-		return strpos($groupId, 'urn') === 0;
 	}
 }

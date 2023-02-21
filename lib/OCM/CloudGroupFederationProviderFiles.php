@@ -343,7 +343,7 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 	 */
 	private function mapShareTypeToNextcloud($shareType) {
 		$result = IShare::TYPE_USER;
-		if ($shareType === 'group' || $shareType === 'federated_group') {
+		if ($shareType === 'group' || $shareType === 'federation') {
 			$result = IShare::TYPE_GROUP;
 		}
 
@@ -860,6 +860,6 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 	 * @since 14.0.0
 	 */
 	public function getSupportedShareTypes() {
-		return ['federated_group'];
+		return ['federation'];
 	}
 }
