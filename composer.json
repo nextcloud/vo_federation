@@ -3,15 +3,26 @@
     "description": "VO Federation for Community AAIs",
     "type": "project",
     "license": "AGPL",
+    "config": {
+        "optimize-autoloader": true,
+        "classmap-authoritative": true,
+        "allow-plugins": {
+            "bamarni/composer-bin-plugin": true
+        },
+        "platform": {
+          "php": "7.4"
+        }
+    },
     "authors": [
         {
             "name": "publicplan GmbH"
         }
     ],
     "scripts": {
-        "cs:fix": "php-cs-fixer fix",
-        "cs:check": "php-cs-fixer fix --dry-run --diff",
         "lint": "find . -name \\*.php -not -path './vendor/*' -not -path './build/*' -not -path './node_modules/*' -print0 | xargs -0 -n1 php -l",
+        "cs:check": "php-cs-fixer fix --dry-run --diff",
+        "cs:fix": "php-cs-fixer fix",
+        "cs:fix:imports": "php-cs-fixer fix --rules=ordered_imports",
         "psalm": "psalm",
         "psalm:fix": "psalm --alter --issues=InvalidReturnType,InvalidNullableReturnType,MissingParamType,InvalidFalsableReturnType",
         "psalm:update-baseline": "psalm --threads=1 --update-baseline"
@@ -20,7 +31,6 @@
     "require-dev": {
         "nextcloud/coding-standard": "^1.0.0",
         "phpunit/phpunit": "^9.5",
-        "christophwurst/nextcloud": "dev-master",
         "vimeo/psalm": "^4.19"
     }
 }

@@ -1,9 +1,9 @@
 <?php
 
-namespace OCA\VO_Federation\Tests\Integration\Controller;
+namespace OCA\VO_Federation\Tests\Integration;
 
 use OCP\AppFramework\App;
-use Test\TestCase;
+use PHPUnit\Framework\TestCase;
 
 /**
  * This test shows how to make a small Integration Test. Query your class
@@ -13,7 +13,7 @@ use Test\TestCase;
 class AppTest extends TestCase {
 	private $container;
 
-	public function setUp() {
+	public function setUp(): void {
 		parent::setUp();
 		$app = new App('vo_federation');
 		$this->container = $app->getContainer();

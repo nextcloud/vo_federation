@@ -2,18 +2,18 @@
 
 namespace OCA\VO_Federation\Tests\Unit\Controller;
 
-use PHPUnit_Framework_TestCase;
-
+use OCA\VO_Federation\Controller\PageController;
 use OCP\AppFramework\Http\TemplateResponse;
 
-use OCA\VO_Federation\Controller\PageController;
+use OCP\IRequest;
+use PHPUnit\Framework\TestCase;
 
-class PageControllerTest extends PHPUnit_Framework_TestCase {
+class PageControllerTest extends TestCase {
 	private $controller;
 	private $userId = 'john';
 
-	public function setUp() {
-		$request = $this->getMockBuilder('OCP\IRequest')->getMock();
+	public function setUp(): void {
+		$request = $this->createMock(IRequest::class);
 
 		$this->controller = new PageController(
 			'vo_federation', $request, $this->userId
