@@ -240,9 +240,11 @@ export default {
 			justify-content: space-between;
 		}
 
+		/* stylelint-disable */
 		&::v-deep .cropper-view-box {
 			border-radius: 50%;
 		}
+		/* stylelint-enable */
 	}
 }
 

@@ -13,6 +13,7 @@ webpackConfig.stats = {
 webpackConfig.entry = {
 	personalSettings: { import: path.join(__dirname, 'src', 'personalSettings.js'), filename: 'vo_federation-personalSettings.js' },
 	adminSettings: { import: path.join(__dirname, 'src', 'adminSettings.js'), filename: 'vo_federation-adminSettings.js' },
+	filesSharing: { import: path.join(__dirname, 'src', 'filesSharing.js'), filename: 'vo_federation-filesSharing.js' },
 }
 
 module.exports = webpackConfig

@@ -26,7 +26,13 @@ declare(strict_types=1);
 namespace OCA\VO_Federation\AppInfo;
 
 use OC\EventDispatcher\EventDispatcher;
+use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCA\VO_Federation\Backend\GroupBackend;
+use OCA\VO_Federation\FederatedGroupShareProvider;
+use OCA\VO_Federation\Federation\CloudIdResolver;
+use OCA\VO_Federation\Listeners\LoadAdditionalScriptsListener;
+use OCA\VO_Federation\Middleware\ShareAPIMiddleware;
+use OCA\VO_Federation\OCM\CloudGroupFederationProviderFiles;
 use OCA\VO_Federation\Service\GroupsService;
 use OCA\VO_Federation\Service\ProviderService;
 use OCP\AppFramework\App;
@@ -34,8 +40,12 @@ use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\Federation\ICloudFederationProviderManager;
+use OCP\Federation\ICloudIdManager;
 use OCP\IGroupManager;
+use OCP\Share\IManager;
 use OCP\User\Events\UserLoggedInEvent;
+use Psr\Container\ContainerInterface;
 
 /**
  * Class Application
@@ -55,14 +65,26 @@ class Application extends App implements IBootstrap {
 	}
 
 	public function register(IRegistrationContext $context): void {
+		$context->registerEventListener(LoadAdditionalScriptsEvent::class, LoadAdditionalScriptsListener::class);
 	}
 
 	public function boot(IBootContext $context): void {
 		$context->injectFn(function (
 			IGroupManager $groupManager,
 			GroupBackend $groupBackend,
+			IManager $shareManager,
+			ICloudFederationProviderManager $federationProviderManager,
+			ICloudIdManager $cloudIdManager,
+			CloudIdResolver $resolver,
+			ContainerInterface $appContainer
 		) {
 			$groupManager->addBackend($groupBackend);
+			$shareManager->registerShareProvider(FederatedGroupShareProvider::class);
+			$federationProviderManager->addCloudFederationProvider('file', 'Federated Files Sharing (federated_group)',
+				function () use ($appContainer): CloudGroupFederationProviderFiles {
+					return $appContainer->get(CloudGroupFederationProviderFiles::class);
+				});
+			$cloudIdManager->registerCloudIdResolver($resolver);
 		});
 
 		$context->injectFn(function (EventDispatcher $dispatcher,
@@ -91,5 +113,8 @@ class Application extends App implements IBootstrap {
 				}
 			);
 		});
+		
+		$filesSharingAppContainer = \OC::$server->getRegisteredAppContainer('files_sharing');
+		$filesSharingAppContainer->registerMiddleWare(ShareAPIMiddleware::class);
 	}
 }
