@@ -27,6 +27,8 @@ declare(strict_types=1);
 namespace OCA\VO_Federation\Controller;
 
 use OCA\VO_Federation\AppInfo\Application;
+use OCA\VO_Federation\Db\SessionMapper;
+use OCA\VO_Federation\Service\GroupsService;
 use OCA\VO_Federation\Service\ProviderService;
 use OCA\VO_Federation\Vendor\Firebase\JWT\JWK;
 use OCA\VO_Federation\Vendor\Firebase\JWT\JWT;
@@ -67,6 +69,12 @@ class LoginController extends Controller {
 	/** @var ProviderService */
 	private $providerService;
 
+	/** @var GroupsService */
+	private $groupsService;
+
+	/** @var SessionMapper */
+	private $sessionMapper;
+
 	/** @var LoggerInterface */
 	private $logger;
 
@@ -85,6 +93,8 @@ class LoginController extends Controller {
 		ITimeFactory $timeFactory,
 		IConfig $config,
 		ProviderService $providerService,
+		GroupsService $groupsService,
+		SessionMapper $sessionMapper,
 		LoggerInterface $logger,
 		?string $userId
 	) {
@@ -96,6 +106,8 @@ class LoginController extends Controller {
 		$this->urlGenerator = $urlGenerator;
 		$this->timeFactory = $timeFactory;
 		$this->providerService = $providerService;
+		$this->groupsService = $groupsService;
+		$this->sessionMapper = $sessionMapper;
 		$this->logger = $logger;
 		$this->config = $config;
 		$this->userId = $userId;
@@ -331,9 +343,8 @@ class LoginController extends Controller {
 		$displayname = $idTokenPayload->{$displaynameAttribute} ?? $userId;
 
 		// Create OIDC session for user
-		$this->config->setUserValue($this->userId, Application::APP_ID, $providerId . '-accessToken', $accessToken);
-		$this->config->setUserValue($this->userId, Application::APP_ID, $providerId . '-refreshToken', $refreshToken);
-		$this->config->setUserValue($this->userId, Application::APP_ID, $providerId . '-displayName', $displayname);
+		$this->sessionMapper->createOrUpdateSession($this->userId, $providerId, $idTokenRaw, $userId, $idTokenPayload->exp, $accessToken, 0, $refreshToken, 0, $displayname);
+		$this->groupsService->syncUser($this->userId, $providerId);
 
 		return new RedirectResponse(
 			$this->urlGenerator->linkToRoute('settings.PersonalSettings.index', ['section' => 'connected-accounts']) .

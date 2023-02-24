@@ -30,6 +30,8 @@ use OCA\VO_Federation\AppInfo\Application;
 use OCA\VO_Federation\Avatar\NamedAvatar;
 use OCA\VO_Federation\Db\Provider;
 use OCA\VO_Federation\Db\ProviderMapper;
+use OCA\VO_Federation\Db\Session;
+use OCA\VO_Federation\Db\SessionMapper;
 use OCA\VO_Federation\Db\TrustedInstance;
 use OCA\VO_Federation\Db\TrustedInstanceMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -53,6 +55,8 @@ class ProviderService {
 
 	/** @var ProviderMapper */
 	private $providerMapper;
+	/** @var SessionMapper */
+	private $sessionMapper;
 	/** @var TrustedInstanceMapper */
 	private $trustedInstanceMapper;
 	/** @var ContainerInterface */
@@ -69,6 +73,7 @@ class ProviderService {
 								LoggerInterface $logger,
 								IAppData $appData,
 								ProviderMapper $providerMapper,
+								SessionMapper $sessionMapper,
 								TrustedInstanceMapper $trustedInstanceMapper,
 								ContainerInterface $appContainer,
 								IURLGenerator $urlGenerator) {
@@ -77,6 +82,7 @@ class ProviderService {
 		$this->logger = $logger;
 		$this->appData = $appData;
 		$this->providerMapper = $providerMapper;
+		$this->sessionMapper = $sessionMapper;
 		$this->trustedInstanceMapper = $trustedInstanceMapper;
 		$this->appContainer = $appContainer;
 		$this->urlGenerator = $urlGenerator;
@@ -117,16 +123,33 @@ class ProviderService {
 		return $this->trustedInstanceMapper->findAll($providerId);
 	}
 
+	public function getProviderSession(string $uid, int $providerId): ?Session {
+		try {
+			return $this->sessionMapper->findSessionByProviderId($uid, $providerId);
+		} catch (DoesNotExistException $e) {
+			return null;
+		}
+	}
+
 	public function deleteProvider(int $providerId): Provider {
 		$provider = $this->getProvider($providerId);
 		$this->providerMapper->delete($provider);
 		$this->trustedInstanceMapper->deleteAll($providerId);
-		// TODO: Invalidate all provider sessions
+		$this->sessionMapper->deleteAllSessions($providerId);
 
 		$groupsService = $this->appContainer->get(GroupsService::class);
 		$groupsService->removeAllProviderMemberships($provider);
 
 		return $provider;
+	}
+
+	public function deleteProviderSession(string $uid, int $providerId): Session {
+		$deletedSession = $this->sessionMapper->deleteSession($uid, $providerId);
+
+		$groupsService = $this->appContainer->get(GroupsService::class);
+		$groupsService->removeAllSessionMemberships($deletedSession);
+
+		return $deletedSession;
 	}
 
 	public function createOrUpdateTrustedInstances(int $providerId, array $newTrustedInstances): bool {

@@ -29,13 +29,10 @@ use OCA\VO_Federation\AppInfo\Application;
 use OCA\VO_Federation\Service\ProviderService;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IInitialState;
-use OCP\IConfig;
 use OCP\Settings\ISettings;
 use OCP\Util;
 
 class Personal implements ISettings {
-	/** @var IConfig */
-	private $config;
 	/** @var IInitialState */
 	private $initialStateService;
 	/** @var string|null */
@@ -43,11 +40,9 @@ class Personal implements ISettings {
 	/** @var ProviderService */
 	private $providerService;
 
-	public function __construct(IConfig $config,
-								IInitialState $initialStateService,
+	public function __construct(IInitialState $initialStateService,
 								ProviderService $providerService,
 								?string $userId) {
-		$this->config = $config;
 		$this->initialStateService = $initialStateService;
 		$this->providerService = $providerService;
 		$this->userId = $userId;
@@ -57,14 +52,12 @@ class Personal implements ISettings {
 	 * @return TemplateResponse
 	 */
 	public function getForm(): TemplateResponse {
-		$config = $this->config;
 		$providerService = $this->providerService;
 		$userId = $this->userId;
 
 		$providers = $providerService->getProvidersWithSettings();
-		$providersWithSession = array_map(function (array $provider) use ($config, $providerService, $userId) {
-			$sessionAccessToken = $config->getUserValue($userId, Application::APP_ID, $provider['id'] . '-accessToken', null);
-			$sessionDisplayname = $config->getUserValue($userId, Application::APP_ID, $provider['id'] . '-displayName', null);
+		$providersWithSession = array_map(function (array $provider) use ($providerService, $userId) {
+			$session = $providerService->getProviderSession($userId, $provider['id']);
 
 			$providerWithSession = [
 				'providerId' => $provider['id'],
@@ -74,9 +67,12 @@ class Personal implements ISettings {
 				'timestamp' => -1,
 			];
 
-			if ($sessionAccessToken !== null) {
+			if ($session !== null) {
 				$providerWithSession['active'] = true;
-				$providerWithSession['displayName'] = $sessionDisplayname;
+				$providerWithSession['displayName'] = $session->getUserinfoDisplayName();
+				if ($session->getLastSync()) {
+					$providerWithSession['timestamp'] = $session->getLastSync()->getTimestamp();
+				}
 			}
 
 			return $providerWithSession;

@@ -29,35 +29,41 @@ namespace OCA\VO_Federation\Controller;
 use OCA\VO_Federation\AppInfo\Application;
 use OCA\VO_Federation\Db\Provider;
 use OCA\VO_Federation\Db\ProviderMapper;
+use OCA\VO_Federation\Event\VOFederationChangeEvent;
+use OCA\VO_Federation\Service\GroupsService;
 use OCA\VO_Federation\Service\ProviderService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
-use OCP\IConfig;
+use OCP\EventDispatcher\IEventDispatcher;
 use OCP\IRequest;
 
 class SettingsController extends Controller {
-	/** @var IConfig */
-	private $config;
 	/** @var ProviderMapper */
 	private $providerMapper;
 	/** @var ProviderService */
 	private $providerService;
+	/** @var GroupsService */
+	private $groupsService;
+	private IEventDispatcher $eventDispatcher;
 	/** @var string|null */
 	private $userId;
 
 	public function __construct(
-		IConfig $config,
 		IRequest $request,
 		ProviderMapper $providerMapper,
 		ProviderService $providerService,
-		?string $userId) {
+		GroupsService $groupsService,
+		?string $userId,
+		IEventDispatcher $eventDispatcher,
+		) {
 		parent::__construct(Application::APP_ID, $request);
-		
-		$this->config = $config;
+
 		$this->providerMapper = $providerMapper;
 		$this->providerService = $providerService;
+		$this->groupsService = $groupsService;
+		$this->eventDispatcher = $eventDispatcher;
 
 		$this->userId = $userId;
 	}
@@ -120,12 +126,11 @@ class SettingsController extends Controller {
 		// TODO: Create Event to enable other components to react to changes in federation composition
 		$changedTrustedInstances = $this->providerService->createOrUpdateTrustedInstances($providerId, $trustedInstances);
 		if ($changedTrustedInstances) {
-			// TODO: Issue FederationChangeEvent
+			$this->eventDispatcher->dispatchTyped(new VOFederationChangeEvent($providerId, $trustedInstances));
 		}
 
-
 		if ($groupsClaim !== $oldGroupsClaim || $oldGroupsRegex !== $oldGroupsRegex) {
-			// TODO: Update VO groups managed by this provider
+			$this->groupsService->updateAllProviderGroups($provider);
 		}
 
 		// invalidate JWKS cache
@@ -156,10 +161,7 @@ class SettingsController extends Controller {
 	 * @NoAdminRequired
 	 */
 	public function logoutProvider(int $providerId): JSONResponse {
-		$this->config->deleteUserValue($this->userId, Application::APP_ID, $providerId . '-accessToken');
-		$this->config->deleteUserValue($this->userId, Application::APP_ID, $providerId . '-refreshToken');
-		$this->config->deleteUserValue($this->userId, Application::APP_ID, $providerId . '-displayName');
-
+		$this->providerService->deleteProviderSession($this->userId, $providerId);
 		return new JSONResponse([], Http::STATUS_OK);
 	}
 }

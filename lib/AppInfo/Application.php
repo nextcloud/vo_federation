@@ -25,10 +25,17 @@ declare(strict_types=1);
 
 namespace OCA\VO_Federation\AppInfo;
 
+use OC\EventDispatcher\EventDispatcher;
+use OCA\VO_Federation\Backend\GroupBackend;
+use OCA\VO_Federation\Service\GroupsService;
+use OCA\VO_Federation\Service\ProviderService;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
+use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IGroupManager;
+use OCP\User\Events\UserLoggedInEvent;
 
 /**
  * Class Application
@@ -51,5 +58,38 @@ class Application extends App implements IBootstrap {
 	}
 
 	public function boot(IBootContext $context): void {
+		$context->injectFn(function (
+			IGroupManager $groupManager,
+			GroupBackend $groupBackend,
+		) {
+			$groupManager->addBackend($groupBackend);
+		});
+
+		$context->injectFn(function (EventDispatcher $dispatcher,
+			ProviderService $providerService,
+			GroupsService $groupsService) {
+			/*
+			 * @todo move the OCP events and then move the registration to `register`
+			 */
+			$dispatcher->addListener(
+				UserLoggedInEvent::class,
+				function (\OCP\User\Events\UserLoggedInEvent $event) use ($providerService, $groupsService) {
+					$providers = $providerService->getProvidersWithSettings();
+					foreach ($providers as $provider) {
+						$providerId = $provider['id'];
+						$userId = $event->getUser()->getUID();
+						try {
+							$session = $providerService->getProviderSession($userId, $providerId);
+							if ($session !== null) {
+								$groupsService->syncUser($userId, $providerId);
+							}
+						} catch (DoesNotExistException $e) {
+						} catch (\Exception $other) {
+							// TODO: Handle server availability
+						}
+					}
+				}
+			);
+		});
 	}
 }
