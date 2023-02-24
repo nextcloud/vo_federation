@@ -10,7 +10,7 @@
             "bamarni/composer-bin-plugin": true
         },
         "platform": {
-          "php": "7.4"
+            "php": "7.4"
         }
     },
     "authors": [
@@ -25,12 +25,37 @@
         "cs:fix:imports": "php-cs-fixer fix --rules=ordered_imports",
         "psalm": "psalm",
         "psalm:fix": "psalm --alter --issues=InvalidReturnType,InvalidNullableReturnType,MissingParamType,InvalidFalsableReturnType",
-        "psalm:update-baseline": "psalm --threads=1 --update-baseline"
+        "psalm:update-baseline": "psalm --threads=1 --update-baseline",
+        "post-install-cmd": [
+            "@composer bin all install --ansi",
+            "\"vendor/bin/mozart\" compose",
+            "composer dump-autoload"
+          ],
+          "post-update-cmd": [
+            "@composer bin all install --ansi",
+            "\"vendor/bin/mozart\" compose",
+            "composer dump-autoload"
+          ]
     },
-    "require": {},
+    "require": {
+        "firebase/php-jwt": "^5.2"
+    },
     "require-dev": {
+        "bamarni/composer-bin-plugin": "^1.4",
         "nextcloud/coding-standard": "^1.0.0",
         "phpunit/phpunit": "^9.5",
         "vimeo/psalm": "^4.19"
+    },
+    "extra": {
+        "mozart": {
+            "dep_namespace": "OCA\\VO_Federation\\Vendor\\",
+            "dep_directory": "/lib/Vendor/",
+            "classmap_directory": "/lib/autoload/",
+            "classmap_prefix": "NEXTCLOUD_VO_FEDERATION_",
+            "packages": [
+                "firebase/php-jwt"
+            ],
+            "delete_vendor_directories": true
+        }
     }
 }

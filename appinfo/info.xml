@@ -9,19 +9,19 @@
 The VO Federation app for Community AAIs allows federated sharing across VO groups independent of the Nextcloud instance any particular group member is using. Nextcloud users who want to participate in VO groups need to link their user account to their Community AAI using OpenID Connect.
 
 VO Federation enhances existing federation features by allowing Community AAIs to define groups on the shared user directory of all trusted Nextcloud instances using the app.]]></description>
-    <version>0.0.1</version>
+    <version>0.3.0</version>
     <licence>agpl</licence>
     <author>publicplan GmbH</author>
     <namespace>VO_Federation</namespace>
     <category>social</category>
     <bugs>https://github.com/nextcloud/vo_federation/issues</bugs>
     <dependencies>
-        <nextcloud min-version="25" max-version="25"/>
+        <nextcloud min-version="26" max-version="26"/>
     </dependencies>
-    <navigations>
-        <navigation>
-            <name>VO Federation</name>
-            <route>vo_federation.page.index</route>
-        </navigation>
-    </navigations>
+    <settings>
+        <admin>OCA\VO_Federation\Settings\Admin</admin>
+        <admin-section>OCA\VO_Federation\Settings\AdminSection</admin-section>
+        <personal>OCA\VO_Federation\Settings\Personal</personal>
+        <personal-section>OCA\VO_Federation\Settings\PersonalSection</personal-section>
+    </settings>
 </info>

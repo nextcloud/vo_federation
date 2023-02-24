@@ -1,0 +1,386 @@
+<!--
+  - @copyright 2020 Christoph Wurst <christoph@winzerhof-wurst.at>
+  -
+  - @author 2020 Christoph Wurst <christoph@winzerhof-wurst.at>
+  - @author Sandro Mesterheide <sandro.mesterheide@extern.publicplan.de>
+  -
+  - @license GNU AGPL version 3 or any later version
+  -
+  - This program is free software: you can redistribute it and/or modify
+  - it under the terms of the GNU Affero General Public License as
+  - published by the Free Software Foundation, either version 3 of the
+  - License, or (at your option) any later version.
+  -
+  - This program is distributed in the hope that it will be useful,
+  - but WITHOUT ANY WARRANTY; without even the implied warranty of
+  - MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  - GNU Affero General Public License for more details.
+  -
+  - You should have received a copy of the GNU Affero General Public License
+  - along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  -->
+
+<template>
+	<div class="section">
+		<h2>
+			{{ t('vo_federation', 'Registered Community AAIs') }}
+			<NcActions>
+				<NcActionButton icon="icon-add" @click="addNewProvider">
+					{{ t('vo_federation', 'Register new AAI') }}
+				</NcActionButton>
+			</NcActions>
+		</h2>
+
+		<div class="oidcproviders">
+			<p v-if="providers.length === 0">
+				{{ t('vo_federation', 'No AIIs registered.') }}
+			</p>
+			<div v-for="provider in providers"
+				v-else
+				:key="provider.id"
+				class="oidcproviders__provider">
+				<div class="oidcproviders__details">
+					<b>{{ provider.identifier }}</b><br>
+					{{ t('vo_federation', 'Client ID') }}: {{ provider.clientId }}<br>
+					{{ t('vo_federation', 'Authorization endpoint') }}: {{ provider.settings.authorizationEndpoint }}
+				</div>
+				<NcActions>
+					<NcActionButton icon="icon-rename" @click="updateProvider(provider.id)">
+						{{ t('vo_federation', 'Update') }}
+					</NcActionButton>
+				</NcActions>
+				<NcActions>
+					<NcActionButton icon="icon-delete" @click="onRemove(provider.id)">
+						{{ t('vo_federation', 'Remove') }}
+					</NcActionButton>
+				</NcActions>
+			</div>
+		</div>
+
+		<NcModal v-if="editProvider !== null" :can-close="false" :title="modalTitle">
+			<div class="providermodal__wrapper">
+				<form ref="providerForm" class="provider-edit" @submit.prevent="onSubmit">
+					<h3 style="font-weight: bold">
+						{{ t('vo_federation', 'OIDC settings') }}
+					</h3>
+					<AvatarSection v-if="isUpdating"
+						:avatar-display-name="editProvider.identifier"
+						:provider-id="editProvider.id"
+						:initial-avatar-url="editProvider.avatarUrl"
+						@update-url="(url) => updateProviderUrl(editProvider.id, url)" />
+					<p>
+						<label for="oidc-client-id">{{ t('vo_federation', 'Name') }}</label>
+						<input id="oidc-client-identifier"
+							v-model="editProvider.identifier"
+							required
+							type="text">
+					</p>
+					<p>
+						<label for="oidc-client-id">{{ t('vo_federation', 'Client ID') }}</label>
+						<input id="oidc-client-id"
+							v-model="editProvider.clientId"
+							required
+							type="text">
+					</p>
+					<p>
+						<label for="oidc-client-secret">{{ t('vo_federation', 'Client secret') }}</label>
+						<input id="oidc-client-secret"
+							v-model="editProvider.clientSecret"
+							:required="!isUpdating"
+							:placeholder="isUpdating ? t('vo_federation', 'Leave empty to keep existing') : null"
+							type="password"
+							autocomplete="off">
+					</p>
+					<p>
+						<label for="oidc-authorization-endpoint">{{ t('vo_federation', 'Authorization endpoint') }}</label>
+						<input id="oidc-authorization-endpoint"
+							v-model="editProvider.settings.authorizationEndpoint"
+							required
+							type="text">
+					</p>
+					<p>
+						<label for="oidc-token-endpoint">{{ t('vo_federation', 'Token endpoint') }}</label>
+						<input id="oidc-token-endpoint"
+							v-model="editProvider.settings.tokenEndpoint"
+							required
+							type="text">
+					</p>
+					<p>
+						<label for="oidc-jwks-endpoint">{{ t('vo_federation', 'JWKS endpoint') }}</label>
+						<input id="oidc-jwks-endpoint"
+							v-model="editProvider.settings.jwksEndpoint"
+							required
+							type="text">
+					</p>
+					<p>
+						<label for="oidc-userinfo-endpoint">{{ t('vo_federation', 'Userinfo endpoint') }}</label>
+						<input id="oidc-userinfo-endpoint"
+							v-model="editProvider.settings.userinfoEndpoint"
+							required
+							type="text">
+					</p>
+					<p>
+						<label for="oidc-scope">{{ t('vo_federation', 'Scope') }}</label>
+						<input id="oidc-scope"
+							v-model="editProvider.scope"
+							required
+							type="text"
+							placeholder="openid email profile">
+					</p>
+					<p>
+						<label for="oidc-extra-claims">{{ t('vo_federation', 'Extra claims') }}</label>
+						<input id="oidc-extra-claims"
+							v-model="editProvider.settings.extraClaims"
+							type="text"
+							placeholder="claim1 claim2 claim3">
+					</p>
+					<h3 style="font-weight: bold">
+						{{ t('vo_federation', 'Attribute mapping') }}
+					</h3>
+					<p>
+						<label for="mapping-uid">{{ t('vo_federation', 'User ID mapping') }}</label>
+						<input id="mapping-uid"
+							v-model="editProvider.uidClaim"
+							required
+							type="text"
+							placeholder="sub">
+					</p>
+					<p>
+						<label for="mapping-displayName">{{ t('vo_federation', 'Display name mapping') }}</label>
+						<input id="mapping-displayName"
+							v-model="editProvider.displayNameClaim"
+							required
+							type="text"
+							placeholder="name">
+					</p>
+					<p>
+						<label for="mapping-group">{{ t('vo_federation', 'Groups mapping') }}</label>
+						<input id="mapping-group"
+							v-model="editProvider.groupsClaim"
+							required
+							type="text"
+							placeholder="groups">
+					</p>
+					<p>
+						<label for="mapping-regex-pattern">{{ t('vo_federation', 'Regex pattern') }}</label>
+						<input id="mapping-regex-pattern"
+							v-model="editProvider.groupsRegex"
+							required
+							type="text"
+							placeholder=".*">
+					</p>
+					<h3 style="font-weight: bold">
+						{{ t('vo_federation', 'Trusted instances') }}
+					</h3>
+					<ul v-if="Array.isArray(editProvider.trustedInstances) && editProvider.trustedInstances.length > 0"
+						style="width: 320px">
+						<NcListItem v-for="(instance, idx) in editProvider.trustedInstances"
+							:key="idx"
+							:title="instance"
+							force-display-actions
+							compact>
+							<template #actions>
+								<NcActionButton icon="icon-delete" @click="editProvider.trustedInstances.splice(idx, 1)">
+									{{ t('vo_federation', 'Remove') }}
+								</NcActionButton>
+							</template>
+						</NcListItem>
+					</ul>
+					<div style="display: flex; align-items: center;">
+						<button v-if="!addingTrustedInstance" @click="addingTrustedInstance = !addingTrustedInstance">
+							{{ t('vo_federation', '+ Add trusted instance') }}
+						</button>
+						<p v-else style="display: flex; align-items: center">
+							<input ref="newInstance"
+								type="url"
+								placeholder="https://example.com">
+							<button @click="addTrustedInstance">
+								{{ t('vo_federation', 'Add') }}
+							</button>
+						</p>
+					</div>
+					<fieldset style="margin-top: 10px">
+						<input type="submit" :value="t('vo_federation', isUpdating ? 'Update' : 'Create')">
+						<input type="button" :value="t('vo_federation', 'Cancel')" @click="editProvider = null">
+					</fieldset>
+				</form>
+			</div>
+		</NcModal>
+	</div>
+</template>
+
+<script>
+import { loadState } from '@nextcloud/initial-state'
+import axios from '@nextcloud/axios'
+import { generateUrl } from '@nextcloud/router'
+import { showError, showSuccess } from '@nextcloud/dialogs'
+import { NcActions, NcActionButton, NcListItem, NcModal } from '@nextcloud/vue'
+
+import AvatarSection from './AvatarSection.vue'
+
+const provider = {
+	id: null,
+	identifier: '',
+	clientId: '',
+	clientSecret: '',
+	discoveryEndpoint: '',
+	scope: '',
+	uidClaim: '',
+	displayNameClaim: '',
+	groupsClaim: '',
+	groupsRegex: '',
+	settings: {
+		authorizationEndpoint: '',
+		tokenEndpoint: '',
+		jwksEndpoint: '',
+		userinfoEndpoint: '',
+		extraClaims: '',
+	},
+	trustedInstances: [],
+}
+
+export default {
+	name: 'AdminSettings',
+	components: {
+		NcActions,
+		NcActionButton,
+		NcModal,
+		NcListItem,
+		AvatarSection,
+	},
+	data() {
+		return {
+			providers: loadState('vo_federation', 'providers'),
+			editProvider: null,
+			addingTrustedInstance: false,
+		}
+	},
+	computed: {
+		modalTitle() {
+			return this.editProvider?.id != null
+				? this.editProvider.clientId
+				: t('user_oids', 'Register a new provider')
+		},
+		isUpdating() {
+			return this.editProvider?.id != null
+		},
+	},
+	methods: {
+		async onSubmit() {
+			if (this.editProvider.id == null) {
+				const url = generateUrl('/apps/vo_federation/provider')
+				try {
+					const response = await axios.post(url, this.editProvider)
+					this.providers.push({
+						...this.editProvider,
+						id: response.data.id,
+					})
+					this.editProvider = null
+					showSuccess(t('vo_federation', 'Provider created successfully'))
+				} catch (error) {
+					console.error('Could not create the provider: ' + error.message, { error })
+					showError(t('vo_federation', 'Could not create the provider:') + ' ' + (error.response?.data?.message ?? error.message))
+				}
+			} else {
+				const url = generateUrl(`/apps/vo_federation/provider/${this.editProvider.id}`)
+				try {
+					await axios.put(url, this.editProvider)
+					const providerIndex = this.providers.findIndex(provider => provider.id === this.editProvider.id)
+					if (providerIndex > -1) {
+						this.$set(this.providers, providerIndex, this.editProvider)
+					}
+					this.editProvider = null
+					showSuccess(t('vo_federation', 'Provider updated successfully'))
+				} catch (error) {
+					console.error('Could not update the provider: ' + error.message, { error })
+					showError(t('vo_federation', 'Could not update the provider:') + ' ' + (error.response?.data?.message ?? error.message))
+				}
+			}
+		},
+		async onRemove(providerId) {
+			const url = generateUrl(`/apps/vo_federation/provider/${providerId}`)
+			try {
+				await axios.delete(url)
+				this.providers = this.providers.filter(provider => provider.id !== providerId)
+			} catch (error) {
+				showError(t('vo_federation', 'Could not remove provider: ' + error.message))
+			}
+		},
+		updateProvider(providerId) {
+			const providerIndex = this.providers.findIndex(provider => provider.id === providerId)
+			if (providerIndex > -1) {
+				this.editProvider = { ...this.providers[providerIndex] }
+			}
+		},
+		updateProviderUrl(providerId, url) {
+			const providerIndex = this.providers.findIndex(provider => provider.id === providerId)
+			if (providerIndex > -1) {
+				this.$set(this.providers[providerIndex], 'avatarUrl', url)
+			}
+		},
+
+		addNewProvider() {
+			this.editProvider = JSON.parse(JSON.stringify(provider))
+		},
+		addTrustedInstance() {
+			const elem = this.$refs.newInstance
+			if (elem.checkValidity()) {
+				this.editProvider.trustedInstances.push(elem.value)
+				this.addingTrustedInstance = false
+			}
+		},
+	},
+}
+</script>
+<style lang="scss" scoped>
+h2 .action-item {
+	vertical-align: middle;
+	margin-top: -2px;
+}
+
+.provider-edit p label {
+	width: 160px;
+	display: inline-block;
+}
+
+.provider-edit p input[type=text],
+.provider-edit p input[type=url],
+.provider-edit p input[type=password] {
+	width: 100%;
+	min-width: 200px;
+	max-width: 400px;
+}
+
+h3 {
+	font-weight: bold;
+	/*padding-bottom: 12px;*/
+}
+
+.oidcproviders {
+	margin-top: 20px;
+	border-top: 1px solid var(--color-border);
+	max-width: 900px;
+}
+
+.oidcproviders__provider {
+	border-bottom: 1px solid var(--color-border);
+	padding: 10px;
+	display: flex;
+
+	&:hover {
+		background-color: var(--color-background-hover);
+	}
+	.oidcproviders__details {
+		flex-grow: 1;
+	}
+}
+
+.providermodal__wrapper {
+	min-width: 320px;
+	width: 50vw;
+	max-width: 800px;
+	height: calc(80vh - 40px);
+	margin: 20px;
+	overflow: scroll;
+}
+</style>
