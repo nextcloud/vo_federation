@@ -28,3 +28,7 @@ You can use the provided Makefile to run all tests by using:
     make test
 
 This will run the PHP unit and integration tests and if a package.json is present in the **js/** folder will execute **npm run test**
+
+## Documentation
+
+Please refer to the User guide and Administrator guide of the [documentation](https://nextcloud-vo-federation.readthedocs.io) for detailed explanations on how to use the app. Developers may find useful resources in the development section.
