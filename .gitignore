@@ -3,5 +3,7 @@
 /vendor/
 /build/
 node_modules/
-/.php_cs.cache
+/.php-cs-fixer.cache
 js/*hot-update.*
+/vendor-bin/**/vendor
+/.vscode
