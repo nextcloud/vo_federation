@@ -13,6 +13,9 @@ VO Federation enhances existing federation features by allowing Community AAIs t
     <licence>agpl</licence>
     <author>publicplan GmbH</author>
     <namespace>VO_Federation</namespace>
+	<types>
+		<filesystem/>
+	</types>
     <category>social</category>
     <bugs>https://github.com/nextcloud/vo_federation/issues</bugs>
     <dependencies>
