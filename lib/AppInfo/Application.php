@@ -31,6 +31,7 @@ use OCA\VO_Federation\Backend\GroupBackend;
 use OCA\VO_Federation\FederatedGroupShareProvider;
 use OCA\VO_Federation\Federation\CloudIdResolver;
 use OCA\VO_Federation\Listeners\LoadAdditionalScriptsListener;
+use OCA\VO_Federation\Listeners\UserRemovedListener;
 use OCA\VO_Federation\Middleware\ShareAPIMiddleware;
 use OCA\VO_Federation\OCM\CloudGroupFederationProviderFiles;
 use OCA\VO_Federation\Service\GroupsService;
@@ -45,6 +46,7 @@ use OCP\Federation\ICloudIdManager;
 use OCP\IGroupManager;
 use OCP\Share\IManager;
 use OCP\User\Events\UserLoggedInEvent;
+use OCP\Group\Events\UserRemovedEvent;
 use Psr\Container\ContainerInterface;
 
 /**
@@ -66,6 +68,7 @@ class Application extends App implements IBootstrap {
 
 	public function register(IRegistrationContext $context): void {
 		$context->registerEventListener(LoadAdditionalScriptsEvent::class, LoadAdditionalScriptsListener::class);
+		$context->registerEventListener(UserRemovedEvent::class, UserRemovedListener::class);
 	}
 
 	public function boot(IBootContext $context): void {

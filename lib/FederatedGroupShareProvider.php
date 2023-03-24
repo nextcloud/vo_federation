@@ -1024,13 +1024,35 @@ class FederatedGroupShareProvider implements IShareProvider {
 	}
 
 	/**
-	 * This provider does not handle groups
+	 * A user is deleted from a group
+	 * We have to clean up all the related user specific group shares
+	 * Providers not handling group shares should just return
 	 *
 	 * @param string $uid
 	 * @param string $gid
 	 */
 	public function userDeletedFromGroup($uid, $gid) {
-		// We don't handle groups here
+		try {
+			$qb1 = $this->dbConnection->getQueryBuilder();
+			$qb1->select('se2.id')
+				->from('share_external', 'se1') // Group share
+				->innerJoin('se1', 'share_external', 'se2', $qb1->expr()->eq('se1.id', 'se2.parent')) // User share
+				->where($qb1->expr()->eq('se1.parent', $qb1->expr()->literal(-1))) 
+				->andWhere($qb1->expr()->eq('se1.share_type', $qb1->expr()->literal(IShare::TYPE_GROUP)))
+				->andWhere($qb1->expr()->eq('se1.user', $qb1->createNamedParameter($gid)))
+				->andWhere($qb1->expr()->eq('se2.user', $qb1->createNamedParameter($uid)));
+			$cursor = $qb1->executeQuery();
+
+			while ($row = $cursor->fetch()) {
+				$qb2 = $this->dbConnection->getQueryBuilder();
+				$qb2->delete('share_external')
+					->where($qb2->expr()->eq('id', $qb2->createNamedParameter($row['id'])));
+				$qb2->executeStatement();
+			}
+			$cursor->closeCursor();
+		} catch (\Doctrine\DBAL\Exception $ex) {
+			$this->logger->emergency('Could not delete user shares', ['exception' => $ex]);
+		}
 	}
 
 	/**
