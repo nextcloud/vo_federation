@@ -58,5 +58,9 @@ class UserRemovedListener implements IEventListener {
 		}
 
 		$this->federatedGroupShareProvider->userDeletedFromGroup($uid, $gid);
+
+		if (empty($event->getGroup()->getUsers())) {
+			$event->getGroup()->delete();
+		}
 	}
 }
