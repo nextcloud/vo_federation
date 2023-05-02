@@ -60,3 +60,15 @@ You need to list all instances that should receive outgoing shares. Omit your ow
   * Changing the regex pattern is a safe operation
 * Newly added instances will not receive existing shares
 
+## Requirements for Community AAIs
+
+VO group membership information must be expressed as Uniform Resource Names (URNs) for Nextcloud to consider them as valid local group counterparts.
+
+### Keycloak
+
+To achieve this configuration in Keycloak `Full group path` must be disabled for the claim that map to the VO group membership. In addition group names must be valid URNs.
+
+![Keycloak group membership mapping](images/aai-keycloak-group-membership-mapping.png)
+
+
+
