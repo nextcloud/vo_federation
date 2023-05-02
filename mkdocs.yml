@@ -3,5 +3,6 @@ theme:
     name: readthedocs
 nav:
     - Home: index.md
-    - Developer documentation:
-        - Getting started: development-environment.md
+    - User guide: user-guide.md
+    - Admin guide: admin-guide.md    
+    - Developer documentation: development-environment.md
