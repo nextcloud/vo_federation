@@ -68,14 +68,14 @@ class CloudIdResolver implements ICloudIdResolver {
 	 * @return bool
 	 */
 	public function isValidCloudId(string $cloudId): bool {
-		if (strpos($cloudId, '@') !== false) {
-			$urnPos = strpos($cloudId, 'urn:');
-			if ($urnPos !== false && $urnPos <= 1) {
-				return true;
-			};
+		if (strpos($cloudId, '@') === false) {
+			return false;
 		}
+		if (strpos($cloudId, 'urn:') !== 0) {
+			return false;
+		};
 
-		return false;
+		return true;
 	}
 
 	/**
