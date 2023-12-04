@@ -648,7 +648,7 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 		if (!isset($notification['senderId'])) {
 			throw new BadRequestException(['senderId']);
 		}
-		$senderId = $notification['senderId'];
+		$senderId = (int) $notification['senderId'];
 
 		try {
 			$share = $this->federatedGroupShareProvider->getShareById($id);
@@ -681,15 +681,15 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 		if ($share->getPermissions() & Constants::PERMISSION_SHARE) {
 			// the recipient of the initial share is now the initiator for the re-share
 			$share->setSharedBy($sharedByFederatedId);
-			$share->setSharedWith($shareWith);
+			$share->setSharedWith($user);
 			$share->setShareType(IShare::TYPE_FEDERATED_GROUP);
 
-			$alreadyShared = $this->federatedGroupShareProvider->getSharedWith($shareWith, IShare::TYPE_FEDERATED_GROUP, $share->getNode(), 1, 0);
+			$alreadyShared = $this->federatedGroupShareProvider->getSharedWith($user, IShare::TYPE_FEDERATED_GROUP, $share->getNode(), 1, 0);
 			if (!empty($alreadyShared)) {
-				$reShareId = (int) $alreadyShared[0]->getId();
+				$reShareId = $alreadyShared[0]->getId();
 			} else {
 				$reShareId = $this->federatedGroupShareProvider->createFederatedShare($share, -1);
-				$this->federatedGroupShareProvider->storeRemoteId($reShareId, $senderId);
+				$this->federatedGroupShareProvider->storeRemoteId($reShareId, (string)$senderId);
 			}
 
 			$voShare = new VOShare();

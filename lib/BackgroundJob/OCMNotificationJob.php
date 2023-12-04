@@ -150,7 +150,7 @@ class OCMNotificationJob extends TimedJob {
 					$send = is_string($token) && $token !== '';
 					if ($send) {
 						$voShare->setToken($token);
-						$this->shareProvider->storeRemoteId($shareId, $remoteId);
+						$this->shareProvider->storeRemoteId($shareId, (string)$remoteId);
 					} else {
 						// TODO: Other reasons
 						$message_t = $this->l->t('File is already shared with %s', [$voShare->getCloudId()]);

@@ -39,6 +39,7 @@
 
 namespace OCA\VO_Federation;
 
+use Exception;
 use OC\Share20\Exception\InvalidShare;
 use OC\Share20\Share;
 use OCA\VO_Federation\AppInfo\Application;
@@ -459,7 +460,9 @@ class FederatedGroupShareProvider implements IShareProvider {
 				// Already added by other reshare instance
 				return;
 			}
-			throw $ex;
+			//throw $ex;
+		} catch (Exception $ex) {
+			// Ingore constraints
 		}
 	}
 
