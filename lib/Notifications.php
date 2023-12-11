@@ -390,7 +390,8 @@ class Notifications {
 					$fields['remoteId'],
 					[
 						'sharedSecret' => $fields['token'],
-						'messgage' => 'file is no longer shared with you'
+						'messgage' => 'file is no longer shared with you',
+						'shareType' => 'federation'
 					]
 				);
 				return $this->federationProviderManager->sendNotification($remoteDomain, $notification);
@@ -402,7 +403,8 @@ class Notifications {
 					$fields['remoteId'],
 					[
 						'sharedSecret' => $fields['token'],
-						'message' => 'reshare was revoked'
+						'message' => 'reshare was revoked',
+						'shareType' => 'federation'		
 					]
 				);
 				return $this->federationProviderManager->sendNotification($remoteDomain, $notification);

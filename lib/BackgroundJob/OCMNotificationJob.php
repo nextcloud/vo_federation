@@ -119,16 +119,18 @@ class OCMNotificationJob extends TimedJob {
 				} elseif ($notification_action === 'unshare') {
 					[, $remote] = $this->addressHandler->splitUserRemote($voShare->getCloudId());
 
-					if ($voShare->getInstanceId() !== -1) {
-						$send = $this->notifications->sendRemoteUnShare($remote, $shareId, $token);
+					$send = $this->notifications->sendRemoteUnShare($remote, $shareId, $token);
 					//$this->revokeShare($share, true);
-					} else { // ... if not we need to correct ID for the unShare request
-						$remoteId = $this->shareProvider->getRemoteIdInt($shareId);
-						$send = $this->notifications->sendRemoteUnShare($remote, $remoteId, $token);
-						//$this->revokeShare($share, false);
-					}
+				} elseif ($notification_action === 'unshare_reshare') {
+					[, $remote] = $this->addressHandler->splitUserRemote($voShare->getCloudId());
+
+					$remoteId = $this->shareProvider->getRemoteIdInt($shareId);
+					$send = $this->notifications->sendRemoteUnShare($remote, $remoteId, $token);
+					//$this->revokeShare($share, false);
 				} elseif ($notification_action === 'reshare') {
 					$share = $this->shareProvider->getShareById($shareId);
+					$cloudId = $this->cloudIdManager->resolveCloudId($share->getShareOwner());
+					$share->setShareOwner($cloudId->getUser());
 					$remoteShare = $this->shareProvider->getShareFromExternalShareTable($share);
 					$token = $remoteShare['share_token'];
 					$remoteId = $remoteShare['remote_id'];
