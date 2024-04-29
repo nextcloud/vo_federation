@@ -2,9 +2,9 @@
 
 namespace OCA\VO_Federation\Controller;
 
-use OCP\IRequest;
-use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Controller;
+use OCP\AppFramework\Http\TemplateResponse;
+use OCP\IRequest;
 
 class PageController extends Controller {
 	private $userId;
