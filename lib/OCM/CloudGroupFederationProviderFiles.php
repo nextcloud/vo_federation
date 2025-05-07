@@ -63,6 +63,7 @@ use OCP\Share\IManager;
 use OCP\Share\IShare;
 use OCP\Util;
 use Psr\Log\LoggerInterface;
+use OCP\Files\IFilenameValidator;
 
 class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 	/** @var IAppManager */
@@ -156,6 +157,7 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 		VOShareMapper $voShareMapper,
 		TokenHandler $tokenHandler,
 		//IProviderFactory $providerFactory
+		private IFilenameValidator $filenameValidator,
 	) {
 		$this->appManager = $appManager;
 		$this->federatedGroupShareProvider = $federatedGroupShareProvider;
@@ -230,7 +232,7 @@ class CloudGroupFederationProviderFiles implements ICloudFederationProvider {
 		}
 
 		if ($remote && $token && $name && $owner && $remoteId && $shareWith) {
-			if (!Util::isValidFileName($name)) {
+			if (!$this->filenameValidator->isFilenameValid($name)) {
 				throw new ProviderCouldNotAddShareException('The mountpoint name contains invalid characters.', '', Http::STATUS_BAD_REQUEST);
 			}
 
