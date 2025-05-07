@@ -283,10 +283,11 @@ class LoginController extends Controller {
 			[
 				'body' => [
 					'code' => $code,
-					'client_id' => $clientId,
-					'client_secret' => $clientSecret,
 					'redirect_uri' => $this->urlGenerator->linkToRouteAbsolute(Application::APP_ID . '.login.code'),
 					'grant_type' => 'authorization_code',
+				],
+				'headers' => [
+					'Authorization' => 'Basic ' . base64_encode($clientId . ':' . $clientSecret),
 				],
 			]
 		);
