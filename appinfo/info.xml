@@ -35,4 +35,9 @@ VO Federation enhances existing federation features by allowing Community AAIs t
     <background-jobs>
         <job>OCA\VO_Federation\BackgroundJob\OCMNotificationJob</job>
     </background-jobs>
+	<commands>
+		<command>OCA\VO_Federation\Command\ListProvider</command>
+		<command>OCA\VO_Federation\Command\AddProvider</command>
+		<command>OCA\VO_Federation\Command\DeleteProvider</command>
+	</commands>
 </info>

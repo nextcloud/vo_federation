@@ -107,6 +107,20 @@ class ProviderService {
 		}, $providers);
 	}
 
+	public function getProviderWithSettings(int $id): array {
+		$provider = $this->providerMapper->getProvider($id);
+		$providerId = $provider->getId();
+		$provider = $provider->jsonSerialize();
+		$provider['trustedInstances'] = array_map(function ($trustedInstance) {
+			return $trustedInstance->getInstanceUrl();
+		}, $this->trustedInstanceMapper->findAll($providerId));
+		$avatar = $this->getAvatar($providerId);
+		if (!is_null($avatar) && $avatar->exists()) {
+			$provider['avatarUrl'] = $this->urlGenerator->linkToRouteAbsolute(Application::APP_ID . '.avatar.getAvatar', ['providerId' => $providerId, 'size' => 32]);
+		}
+		return $provider;
+	}
+
 	public function getProvider(int $providerId): Provider {
 		return $this->providerMapper->getProvider($providerId);
 	}
